@@ -1,0 +1,280 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/**
+ * Configuration des thèmes pour l'application médicale single-tenant.
+ *
+ * Ce fichier définit:
+ * - La palette de couleurs sémantiques (médical)
+ * - Les variables CSS pour Shadcn UI
+ * - Les thèmes light/dark
+ *
+ * PALETTE MÉDICALE:
+ * - Primary (Blue-600 #2563eb): Actions principales, identité santé
+ * - Success (Emerald-500 #10b981): Confirmations, rendez-vous validés
+ * - Warning (Amber-500 #f59e0b): Attente, modifications
+ * - Error (Rose-500 #f43f5e): Annulations, erreurs
+ * - Neutral (Slate): Textes, bordures, fonds
+ *
+ * @see docs/front-end-spec/2-design-system-ui-components.md
+ */
+
+/* Mode sombre via classe .dark (toggle) */
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================
+   THÈME CLAIR (Light Mode) - Défaut
+   ============================================ */
+:root {
+  /* ---------- COULEURS MÉDICALES SÉMANTIQUES ---------- */
+
+  /**
+   * PRIMARY - Actions principales et identité santé
+   * Blue-600 pour inspirer confiance et professionnalisme
+   */
+  --medical-primary: #2563eb;
+  --medical-primary-hover: #1d4ed8;
+  --medical-primary-light: #dbeafe;
+
+  /**
+   * SUCCESS - États positifs (rendez-vous confirmés)
+   * Emerald-500 pour les validations
+   */
+  --medical-success: #10b981;
+  --medical-success-light: #d1fae5;
+  --medical-success-dark: #059669;
+
+  /**
+   * WARNING - États d'attente/modification
+   * Amber-500 pour les avertissements non critiques
+   */
+  --medical-warning: #f59e0b;
+  --medical-warning-light: #fef3c7;
+  --medical-warning-dark: #d97706;
+
+  /**
+   * ERROR - États négatifs (annulations, erreurs)
+   * Rose-500 pour les alertes critiques
+   */
+  --medical-error: #f43f5e;
+  --medical-error-light: #ffe4e6;
+  --medical-error-dark: #e11d48;
+
+  /* ---------- PALETTE SLATE (Neutres) ---------- */
+  --slate-50: #f8fafc;
+  --slate-100: #f1f5f9;
+  --slate-200: #e2e8f0;
+  --slate-300: #cbd5e1;
+  --slate-400: #94a3b8;
+  --slate-500: #64748b;
+  --slate-600: #475569;
+  --slate-700: #334155;
+  --slate-800: #1e293b;
+  --slate-900: #0f172a;
+
+  /* ---------- VARIABLES SHADCN UI (Light) ---------- */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.546 0.245 262.881); /* Blue-600 en oklch */
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.546 0.245 262.881); /* Blue-600 pour le focus */
+  --radius: 0.5rem;
+
+  /* Variables pour les graphiques */
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+
+  /* Variables pour la sidebar */
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.546 0.245 262.881);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.546 0.245 262.881);
+}
+
+/* ============================================
+   THÈME SOMBRE (Dark Mode)
+   ============================================ */
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.623 0.214 259.815); /* Blue-500 pour le dark mode */
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.623 0.214 259.815);
+
+  /* Graphiques dark mode */
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+
+  /* Sidebar dark mode */
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.623 0.214 259.815);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.623 0.214 259.815);
+}
+
+/* ============================================
+   CONFIGURATION THÈME TAILWIND v4
+   ============================================ */
+@theme inline {
+  /* Couleurs Shadcn UI */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Couleurs médicales sémantiques */
+  --color-medical-primary: var(--medical-primary);
+  --color-medical-success: var(--medical-success);
+  --color-medical-warning: var(--medical-warning);
+  --color-medical-error: var(--medical-error);
+
+  /* Graphiques */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Sidebar */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Rayons de bordure */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Polices */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* ============================================
+   STYLES DE BASE
+   ============================================ */
+@layer base {
+  /**
+   * Applique les couleurs de bordure et outline par défaut.
+   */
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  /**
+   * Styles du body avec couleurs de fond et texte.
+   */
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* ============================================
+   CLASSES UTILITAIRES MÉDICALES
+   ============================================
+
+   Ces classes permettent d'utiliser facilement les couleurs
+   sémantiques dans les composants de l'application.
+
+   Exemples d'utilisation:
+   - <div class="bg-medical-success text-white">Confirmé</div>
+   - <span class="text-medical-warning">En attente</span>
+   - <button class="bg-medical-primary">Réserver</button>
+*/
+
+/**
+ * Backgrounds sémantiques pour les états de rendez-vous.
+ */
+.bg-medical-confirmed {
+  background-color: var(--medical-success-light);
+}
+
+.bg-medical-pending {
+  background-color: var(--medical-warning-light);
+}
+
+.bg-medical-cancelled {
+  background-color: var(--medical-error-light);
+}
+
+/**
+ * Badges de statut avec texte coloré.
+ */
+.status-confirmed {
+  color: var(--medical-success-dark);
+  background-color: var(--medical-success-light);
+}
+
+.status-pending {
+  color: var(--medical-warning-dark);
+  background-color: var(--medical-warning-light);
+}
+
+.status-cancelled {
+  color: var(--medical-error-dark);
+  background-color: var(--medical-error-light);
+}

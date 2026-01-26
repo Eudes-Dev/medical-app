@@ -1,0 +1,30 @@
+markdownExploder: true
+qa:
+  qaLocation: docs/qa
+prd:
+  prdFile: docs/prd.md
+  prdVersion: v4
+  prdSharded: true
+  prdShardedLocation: docs/prd
+  epicFilePattern: epic-{n}*.md
+architecture:
+  architectureFile: docs/architecture.md
+  architectureVersion: v4
+  architectureSharded: true
+  architectureShardedLocation: docs/architecture
+frontEndSpec:
+  frontEndSpecFile: docs/front-end-spec.md
+  frontEndSpecSharded: true
+  frontEndSpecShardedLocation: docs/front-end-spec
+backlog:
+  backlogFile: docs/backlog.md
+  backlogSharded: true
+  backlogShardedLocation: docs/backlog
+customTechnicalDocuments: null
+devLoadAlwaysFiles:
+  - docs/architecture/1-structure-globale.md
+  - docs/architecture/2-logique-de-donnes.md
+  - docs/architecture/3-gestion-dtat-zustand.md
+devDebugLog: .ai/debug-log.md
+devStoryLocation: docs/stories
+slashPrefix: BMad
