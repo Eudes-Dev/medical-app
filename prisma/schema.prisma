@@ -1,0 +1,191 @@
+// ==============================================
+// Schéma Prisma - Application Médicale
+// ==============================================
+//
+// Ce fichier définit la structure de la base de données PostgreSQL
+// hébergée sur Supabase.
+//
+// Architecture Single-Tenant:
+// - Application conçue pour un seul cabinet médical
+// - Toutes les données appartiennent au même cabinet
+// - Pas de tenant_id nécessaire dans les modèles
+//
+// Relations principales:
+// - Patient (1) <---> (N) Appointment
+// - User (praticien) gère ses propres rendez-vous
+//
+// @see docs/architecture/2-logique-de-donnes.md
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+// Configuration PostgreSQL Supabase
+// Les URLs de connexion sont définies dans prisma.config.ts (Prisma 7+)
+// - DATABASE_URL: Connexion via pooler PgBouncer (requêtes applicatives)
+// - DIRECT_URL: Connexion directe (migrations DDL)
+datasource db {
+  provider = "postgresql"
+}
+
+// ==============================================
+// ENUMS
+// ==============================================
+
+/// Statuts possibles d'un rendez-vous.
+///
+/// Cycle de vie typique:
+/// PENDING → CONFIRMED → COMPLETED
+///        ↘ CANCELLED (à tout moment avant COMPLETED)
+///
+/// Couleurs UI suggérées:
+/// - PENDING: jaune (en attente de confirmation)
+/// - CONFIRMED: vert (confirmé)
+/// - CANCELLED: rouge (annulé)
+/// - COMPLETED: gris (terminé)
+enum AppointmentStatus {
+  /// En attente de confirmation par le praticien
+  PENDING
+  /// Confirmé par le praticien
+  CONFIRMED
+  /// Annulé (par le patient ou le praticien)
+  CANCELLED
+  /// Consultation terminée
+  COMPLETED
+}
+
+// ==============================================
+// MODÈLES
+// ==============================================
+
+/// Représente le praticien (utilisateur) du cabinet médical.
+///
+/// Ce modèle stocke le profil du praticien. L'authentification est gérée
+/// séparément par Supabase Auth (voir Story 1.3).
+///
+/// Architecture Single-Tenant:
+/// Un seul praticien utilise cette application.
+/// Le modèle est prévu pour une éventuelle extension multi-praticiens.
+///
+/// @example
+/// {
+///   id: "550e8400-e29b-41d4-a716-446655440000",
+///   email: "dr.dupont@cabinet.fr",
+///   name: "Dr. Marie Dupont"
+/// }
+model User {
+  /// Identifiant unique UUID généré automatiquement
+  id        String   @id @default(uuid())
+  /// Adresse email unique du praticien
+  email     String   @unique
+  /// Nom complet du praticien (ex: "Dr. Marie Dupont")
+  name      String
+  /// Date de création du compte
+  createdAt DateTime @default(now()) @map("created_at")
+  /// Date de dernière modification
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Note: Relation vers Appointment ajoutée dans une story future si nécessaire
+
+  @@map("users")
+}
+
+/// Représente un patient du cabinet médical.
+///
+/// Un patient peut avoir plusieurs rendez-vous (relation 1:N avec Appointment).
+///
+/// Champs optionnels:
+/// - email: Optionnel car les patients "invités" peuvent réserver
+///   via le tunnel public sans fournir d'email
+/// - dateOfBirth: Peut être renseigné ultérieurement
+/// - notes: Informations complémentaires ajoutées par le praticien
+///
+/// @example
+/// {
+///   id: "uuid",
+///   firstName: "Jean",
+///   lastName: "Martin",
+///   phone: "0612345678",
+///   email: "jean.martin@email.com"
+/// }
+model Patient {
+  /// Identifiant unique UUID généré automatiquement
+  id          String    @id @default(uuid())
+  /// Prénom du patient
+  firstName   String    @map("first_name")
+  /// Nom de famille du patient
+  lastName    String    @map("last_name")
+  /// Numéro de téléphone (obligatoire pour contact)
+  phone       String
+  /// Adresse email (optionnel - patients invités peuvent réserver sans)
+  email       String?
+  /// Date de naissance (optionnel)
+  dateOfBirth DateTime? @map("date_of_birth")
+  /// Notes médicales ou administratives (optionnel)
+  notes       String?
+  /// Date de création du dossier patient
+  createdAt   DateTime  @default(now()) @map("created_at")
+  /// Date de dernière modification
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  /// Liste des rendez-vous du patient (relation 1:N)
+  appointments Appointment[]
+
+  @@map("patients")
+}
+
+/// Représente un rendez-vous médical.
+///
+/// Lie un patient à un créneau horaire avec un statut de suivi.
+///
+/// Choix de conception:
+/// - startTime/endTime plutôt que duration: Facilite les requêtes de
+///   conflits horaires et l'affichage dans un calendrier
+/// - type: Permet de catégoriser les consultations (ex: "Première consultation",
+///   "Suivi", "Urgence")
+/// - status: Enum pour un typage fort et des transitions contrôlées
+///
+/// Relations:
+/// - Chaque Appointment appartient à un Patient (N:1)
+/// - La suppression d'un Patient cascade sur ses Appointments
+///
+/// @example
+/// {
+///   id: "uuid",
+///   patientId: "patient-uuid",
+///   startTime: "2026-01-27T09:00:00Z",
+///   endTime: "2026-01-27T09:30:00Z",
+///   status: "CONFIRMED",
+///   type: "Consultation de suivi"
+/// }
+model Appointment {
+  /// Identifiant unique UUID généré automatiquement
+  id        String            @id @default(uuid())
+  /// ID du patient associé (clé étrangère)
+  patientId String            @map("patient_id")
+  /// Date et heure de début du rendez-vous
+  startTime DateTime          @map("start_time")
+  /// Date et heure de fin du rendez-vous
+  endTime   DateTime          @map("end_time")
+  /// Statut actuel du rendez-vous
+  status    AppointmentStatus @default(PENDING)
+  /// Type de consultation (ex: "Première consultation", "Suivi", "Urgence")
+  type      String
+  /// Notes sur le rendez-vous (optionnel)
+  notes     String?
+  /// Date de création du rendez-vous
+  createdAt DateTime          @default(now()) @map("created_at")
+  /// Date de dernière modification
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  /// Relation vers le Patient propriétaire du rendez-vous
+  /// onDelete Cascade: Suppression du patient → suppression de ses RDV
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  /// Index sur patientId pour optimiser les requêtes par patient
+  @@index([patientId])
+  /// Index sur startTime pour optimiser les requêtes de calendrier
+  @@index([startTime])
+  @@map("appointments")
+}
