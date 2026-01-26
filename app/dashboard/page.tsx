@@ -1,71 +1,185 @@
 /**
- * Page d'accueil du Dashboard (Espace Praticien)
+ * Page d'accueil du Dashboard
  *
- * Cette page est le point d'entrée de l'espace privé du praticien.
- * Elle sera protégée par authentification (Story 1.3).
+ * Vue d'ensemble de l'activité du cabinet:
+ * - Statistiques du jour (RDV, patients)
+ * - Prochains rendez-vous
+ * - Activité récente
  *
  * Route: /dashboard
  *
  * @module app/dashboard/page
  */
 
+import { Calendar, Clock, Users } from "lucide-react";
+
+import { AppSidebar } from "@/components/app-sidebar";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+} from "@/components/ui/breadcrumb";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 
 /**
- * Page principale du tableau de bord praticien.
- *
- * Fonctionnalités prévues:
- * - Vue d'ensemble des rendez-vous du jour
- * - Accès rapide aux patients récents
- * - Statistiques du cabinet
- *
- * @returns Le composant de page du dashboard
+ * Composant carte de statistique.
+ */
+function StatCard({
+  title,
+  value,
+  description,
+  icon: Icon,
+}: {
+  title: string;
+  value: string;
+  description: string;
+  icon: React.ElementType;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <Icon className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Page principale du dashboard.
  */
 export default function DashboardPage() {
   return (
-    <main className="container mx-auto p-6">
-      <h1 className="text-3xl font-bold text-slate-900 mb-6">
-        Tableau de bord
-      </h1>
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        {/* Header */}
+        <header className="flex h-16 shrink-0 items-center gap-2  px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbPage>Dashboard</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </header>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Carte des rendez-vous du jour */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Rendez-vous du jour</CardTitle>
-          </CardHeader>
-          <CardContent>
+        {/* Contenu principal */}
+        <div className="flex flex-1 flex-col gap-4 p-4">
+          {/* Titre de la page */}
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              Bonjour, Dr. Eudes
+            </h1>
             <p className="text-muted-foreground">
-              Les rendez-vous seront affichés ici après configuration de la base
-              de données (Story 1.2).
+              Voici un aperçu de votre journée.
             </p>
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Carte des patients récents */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Patients récents</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">
-              La liste des patients sera disponible après Story 2.1.
-            </p>
-          </CardContent>
-        </Card>
+          {/* Cartes de statistiques */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <StatCard
+              title="Rendez-vous aujourd'hui"
+              value="8"
+              description="3 confirmés, 5 en attente"
+              icon={Calendar}
+            />
+            <StatCard
+              title="Patients cette semaine"
+              value="24"
+              description="+12% par rapport à la semaine dernière"
+              icon={Users}
+            />
+            <StatCard
+              title="Prochain RDV"
+              value="10:30"
+              description="Jean Martin - Consultation"
+              icon={Clock}
+            />
+          </div>
 
-        {/* Carte des actions rapides */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Actions rapides</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">
-              Les actions seront disponibles prochainement.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    </main>
+          {/* Sections principales */}
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Prochains rendez-vous */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Prochains rendez-vous</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {[
+                    { time: "10:30", patient: "Jean Martin", type: "Consultation" },
+                    { time: "11:00", patient: "Marie Dupont", type: "Suivi" },
+                    { time: "11:30", patient: "Pierre Bernard", type: "Première consultation" },
+                    { time: "14:00", patient: "Sophie Leroy", type: "Contrôle" },
+                  ].map((rdv, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between rounded-lg border p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2563eb]/10 text-[#2563eb] font-medium">
+                          {rdv.time}
+                        </div>
+                        <div>
+                          <p className="font-medium">{rdv.patient}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {rdv.type}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Activité récente */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Activité récente</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {[
+                    { action: "Nouveau patient ajouté", detail: "Sophie Leroy", time: "Il y a 2h" },
+                    { action: "RDV confirmé", detail: "Jean Martin - 10:30", time: "Il y a 3h" },
+                    { action: "Note ajoutée", detail: "Dossier Marie Dupont", time: "Hier" },
+                    { action: "RDV annulé", detail: "Paul Moreau", time: "Hier" },
+                  ].map((activity, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
+                    >
+                      <div>
+                        <p className="font-medium">{activity.action}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {activity.detail}
+                        </p>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {activity.time}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

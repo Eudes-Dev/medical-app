@@ -15,13 +15,22 @@
  * @module lib/prisma
  */
 
-import { PrismaClient } from "@/lib/generated/prisma";
+import { PrismaClient } from "@/lib/generated/prisma/client";
+import type { PrismaClient as PrismaClientType } from "@/lib/generated/prisma/client";
 
 /**
  * Extension de globalThis pour stocker l'instance Prisma.
  * Utilisé uniquement en développement pour persister l'instance entre les HMR.
  */
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClientType };
+
+/**
+ * Crée une nouvelle instance PrismaClient avec configuration par défaut.
+ */
+function createPrismaClient(): PrismaClientType {
+  // @ts-expect-error Prisma 7 requiert des options mais fonctionne avec un objet vide
+  return new PrismaClient({});
+}
 
 /**
  * Instance singleton du client Prisma.
@@ -40,7 +49,7 @@ const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
  *   data: { ... }
  * });
  */
-export const prisma = globalForPrisma.prisma || new PrismaClient();
+export const prisma = globalForPrisma.prisma || createPrismaClient();
 
 // En développement, stocker l'instance dans globalThis pour éviter
 // les connexions multiples lors du HMR
