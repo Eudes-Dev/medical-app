@@ -1,0 +1,48 @@
+schema: 1
+story: "3.1"
+story_title: "State Management (Zustand)"
+gate: PASS
+status_reason: "Tests unitaires du store useCalendarStore exécutés avec succès (14 tests). Test design rédigé ; tous les scénarios P0/P1 identifiés sont couverts par les tests existants (navigation, filtres, cache, getCacheKeyForView)."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-01-29T12:20:00Z"
+
+waiver: { active: false }
+
+top_issues: []
+
+risk_summary:
+  totals:
+    critical: 0
+    high: 0
+    medium: 0
+    low: 0
+  recommendations:
+    must_fix: []
+    monitor: []
+
+quality_score: 88
+
+evidence:
+  tests_reviewed: 14
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7]
+    ac_gaps: []
+
+test_design:
+  scenarios_total: 16
+  by_level:
+    unit: 15
+    integration: 0
+    e2e: 1
+  by_priority:
+    p0: 10
+    p1: 5
+    p2: 1
+  coverage_gaps: []
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Ajouter un test E2E (3.1-E2E-001) pour la restauration des préférences après rechargement si un runner E2E calendrier est en place (Story 3.2)"
+      refs: ["docs/qa/assessments/3.1-test-design-20260129.md"]
