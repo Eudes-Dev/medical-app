@@ -1,0 +1,93 @@
+schema: 1
+story: "2.1"
+story_title: "Dashboard & Liste des Patients"
+gate: CONCERNS
+status_reason: "Implémentation fonctionnelle et bien structurée, mais absence de tests automatisés et quelques préoccupations de sécurité à adresser avant la production."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-01-29T01:30:00Z"
+
+waiver: { active: false }
+
+top_issues:
+  - id: "TEST-001"
+    severity: high
+    finding: "Aucun test automatisé n'a été implémenté pour valider les fonctionnalités"
+    suggested_action: "Ajouter des tests unitaires, d'intégration et E2E selon le test design (docs/qa/assessments/2.1-test-design-20260129.md)"
+    suggested_owner: "dev"
+  - id: "SEC-001"
+    severity: medium
+    finding: "Les Server Actions retournent des données vides au lieu de lever une erreur si non authentifié"
+    suggested_action: "Lever une erreur explicite (UnauthorizedError) pour faciliter le debugging et la sécurité"
+    suggested_owner: "dev"
+  - id: "SEC-002"
+    severity: medium
+    finding: "Pas de validation/sanitization explicite des paramètres de recherche côté serveur"
+    suggested_action: "Ajouter une validation Zod pour le paramètre search (longueur max, caractères autorisés)"
+    suggested_owner: "dev"
+  - id: "REL-001"
+    severity: low
+    finding: "Gestion d'erreurs Prisma non explicite dans les Server Actions"
+    suggested_action: "Ajouter un try-catch avec logging pour les erreurs Prisma"
+    suggested_owner: "dev"
+
+risk_summary:
+  totals:
+    critical: 0
+    high: 1
+    medium: 2
+    low: 1
+  recommendations:
+    must_fix:
+      - "Ajouter des tests automatisés (P0) avant la mise en production"
+    monitor:
+      - "Surveiller les performances de recherche avec un grand nombre de patients"
+      - "Vérifier la gestion des erreurs en production"
+
+quality_score: 70
+
+evidence:
+  tests_reviewed: 0
+  risks_identified: 4
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: CONCERNS
+    notes: "Authentification vérifiée mais gestion d'erreurs non authentifié et validation des entrées à améliorer"
+  performance:
+    status: PASS
+    notes: "Requêtes Prisma optimisées avec Promise.all, pagination efficace, debounce pour la recherche"
+  reliability:
+    status: CONCERNS
+    notes: "Gestion d'erreurs Prisma non explicite, pas de retry logic pour les requêtes"
+  maintainability:
+    status: PASS
+    notes: "Code bien structuré, commenté, utilise les patterns Next.js appropriés"
+
+recommendations:
+  immediate:
+    - action: "Ajouter des tests automatisés selon le test design"
+      refs: ["docs/qa/assessments/2.1-test-design-20260129.md"]
+    - action: "Améliorer la gestion d'erreurs d'authentification dans les Server Actions"
+      refs: ["app/dashboard/actions.ts:52-63", "app/dashboard/patients/actions.ts:61-76"]
+    - action: "Ajouter validation Zod pour le paramètre search"
+      refs: ["app/dashboard/patients/actions.ts:61"]
+  future:
+    - action: "Considérer l'ajout d'un système de cache pour les requêtes fréquentes"
+      refs: ["app/dashboard/actions.ts", "app/dashboard/patients/actions.ts"]
+    - action: "Ajouter des métriques de performance pour surveiller les requêtes Prisma"
+      refs: ["lib/prisma.ts"]
+
+test_design:
+  scenarios_total: 15
+  by_level:
+    unit: 4
+    integration: 7
+    e2e: 4
+  by_priority:
+    p0: 8
+    p1: 5
+    p2: 2
+  coverage_gaps: []
