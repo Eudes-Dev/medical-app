@@ -11,7 +11,6 @@
  * @module app/dashboard/patients/page
  */
 
-import { Plus } from "lucide-react";
 import Link from "next/link";
 
 import { AppSidebar } from "@/components/app-sidebar";
@@ -23,7 +22,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   SidebarInset,
@@ -31,6 +29,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { PatientsTableWrapper } from "@/components/patients/patients-table-wrapper";
+import { CreatePatientModal } from "@/components/patients/create-patient-modal";
 
 /**
  * Page principale de gestion des patients.
@@ -77,13 +76,8 @@ export default function PatientsPage() {
                 Gérez votre base de patients et accédez à leurs informations.
               </p>
             </div>
-            {/* Bouton "Nouveau Patient" - sera utilisé dans la story 2.2 */}
-            <Button asChild className="bg-[#2563eb] hover:bg-[#2563eb]/90">
-              <Link href="/dashboard/patients/new">
-                <Plus className="mr-2 h-4 w-4" />
-                Nouveau Patient
-              </Link>
-            </Button>
+            {/* Bouton "Nouveau Patient" qui ouvre le modal de création (Sheet) */}
+            <CreatePatientModal />
           </div>
 
           {/* Carte principale contenant la table des patients */}

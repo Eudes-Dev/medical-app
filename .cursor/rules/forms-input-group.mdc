@@ -1,0 +1,15 @@
+---
+description: Toujours utiliser le composant InputGroup pour les champs de formulaire
+globs: "**/*.tsx"
+alwaysApply: true
+---
+
+# Conventions de formulaires - InputGroup
+
+- Tous les **nouveaux formulaires React** de l'application doivent utiliser le composant `InputGroup` (et non des `Input`/`Label` "nus") pour les champs simples (email, mot de passe, texte, téléphone, etc.).
+- Lors de la **modification de formulaires existants**, privilégier la migration vers `InputGroup` au fur et à mesure des travaux sur ces écrans.
+- L'objectif est:
+  - d'avoir un rendu cohérent (label, input, message d'erreur, états disabled) sur tout le produit,
+  - de centraliser la gestion des erreurs et du style dans `components/ui/input-group.tsx`.
+- Garder en tête cette règle en particulier quand on crée des composants de type `*Form` dans `components/**` ou des pages de formulaire dans `app/**`.
+

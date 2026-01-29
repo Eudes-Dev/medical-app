@@ -1,13 +1,18 @@
 /**
  * Tests d'intégration pour les Server Actions de gestion des patients
- * 
- * Test IDs: 2.1-INT-004, 2.1-INT-005, 2.1-INT-006, 2.1-INT-007, 2.1-INT-008, 2.1-INT-009, 2.1-INT-010, 2.1-INT-013
- * Priority: P0, P0, P0, P0, P0, P1, P0, P1
- * Level: Integration
+ *
+ * Story 2.1: getPatients (2.1-INT-004 à 2.1-INT-013)
+ * Story 2.2: createPatient, updatePatient, getPatientById, deletePatient (2.2-INT-001 à 2.2-INT-011)
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { getPatients } from "@/app/dashboard/patients/actions";
+import {
+  getPatients,
+  createPatient,
+  updatePatient,
+  getPatientById,
+  deletePatient,
+} from "@/app/dashboard/patients/actions";
 import { UnauthorizedError } from "@/lib/errors";
 
 // Mock Supabase
@@ -15,14 +20,23 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 
-// Mock Prisma
+// Mock Prisma (2.1: findMany, count ; 2.2: create, update, findUnique, delete)
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     patient: {
       findMany: vi.fn(),
       count: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      findUnique: vi.fn(),
+      delete: vi.fn(),
     },
   },
+}));
+
+// Mock revalidatePath
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
 }));
 
 import { createClient } from "@/lib/supabase/server";
@@ -285,5 +299,292 @@ describe("getPatients", () => {
     await expect(getPatients(1, 10, longSearch)).rejects.toThrow(
       "Invalid search parameter"
     );
+  });
+});
+
+// --- Story 2.2: CRUD Patient (createPatient, updatePatient, getPatientById, deletePatient) ---
+
+const mockUser = { id: "user-123", email: "test@example.com" };
+
+function setupAuthMock(authenticated = true) {
+  vi.mocked(createClient).mockResolvedValue({
+    auth: {
+      getUser: vi.fn().mockResolvedValue({
+        data: { user: authenticated ? mockUser : null },
+      }),
+    },
+  } as any);
+}
+
+describe("createPatient (Story 2.2)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupAuthMock(true);
+  });
+
+  it("2.2-INT-001: devrait retourner erreur si données invalides", async () => {
+    const result = await createPatient({
+      lastName: "M",
+      firstName: "Jean",
+      phone: "0612345678",
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: expect.stringContaining("invalides"),
+      })
+    );
+    expect(prisma.patient.create).not.toHaveBeenCalled();
+  });
+
+  it("2.2-INT-003: devrait créer le patient en base avec données valides", async () => {
+    const newPatient = {
+      id: "patient-new",
+      firstName: "Jean",
+      lastName: "Martin",
+      email: "jean@example.com",
+      phone: "0612345678",
+    };
+    vi.mocked(prisma.patient.create).mockResolvedValue(newPatient as any);
+
+    const result = await createPatient({
+      firstName: "Jean",
+      lastName: "Martin",
+      phone: "0612345678",
+      email: "jean@example.com",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.patient).toEqual(newPatient);
+    }
+    expect(prisma.patient.create).toHaveBeenCalledWith({
+      data: {
+        firstName: "Jean",
+        lastName: "Martin",
+        phone: "0612345678",
+        email: "jean@example.com",
+      },
+    });
+  });
+
+  it("2.2-INT-004: devrait revalider la liste après création", async () => {
+    const { revalidatePath } = await import("next/cache");
+    vi.mocked(prisma.patient.create).mockResolvedValue({
+      id: "p1",
+      firstName: "Jean",
+      lastName: "Martin",
+      email: null,
+      phone: "0612345678",
+    } as any);
+
+    await createPatient({
+      firstName: "Jean",
+      lastName: "Martin",
+      phone: "0612345678",
+    });
+
+    expect(revalidatePath).toHaveBeenCalledWith("/dashboard/patients");
+  });
+
+  it("devrait retourner erreur si non authentifié", async () => {
+    setupAuthMock(false);
+    const result = await createPatient({
+      firstName: "Jean",
+      lastName: "Martin",
+      phone: "0612345678",
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: expect.stringContaining("connecté"),
+      })
+    );
+    expect(prisma.patient.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("updatePatient (Story 2.2)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupAuthMock(true);
+  });
+
+  it("2.2-INT-002: devrait retourner erreur si données invalides", async () => {
+    const result = await updatePatient("patient-1", {
+      lastName: "Martin",
+      firstName: "J",
+      phone: "0612345678",
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: expect.stringContaining("invalides"),
+      })
+    );
+    expect(prisma.patient.update).not.toHaveBeenCalled();
+  });
+
+  it("2.2-INT-008: devrait mettre à jour le patient en base", async () => {
+    const updatedPatient = {
+      id: "patient-1",
+      firstName: "Jean",
+      lastName: "Martin",
+      phone: "0612345678",
+      email: "jean@example.com",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      appointments: [],
+    };
+    vi.mocked(prisma.patient.update).mockResolvedValue(updatedPatient as any);
+
+    const result = await updatePatient("patient-1", {
+      firstName: "Jean",
+      lastName: "Martin",
+      phone: "0612345678",
+      email: "jean@example.com",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.patient.id).toBe("patient-1");
+    }
+    expect(prisma.patient.update).toHaveBeenCalledWith({
+      where: { id: "patient-1" },
+      data: {
+        firstName: "Jean",
+        lastName: "Martin",
+        phone: "0612345678",
+        email: "jean@example.com",
+      },
+      include: { appointments: { orderBy: { startTime: "desc" } } },
+    });
+  });
+
+  it("2.2-INT-009: devrait revalider la liste et la fiche après mise à jour", async () => {
+    const { revalidatePath } = await import("next/cache");
+    vi.mocked(prisma.patient.update).mockResolvedValue({
+      id: "patient-1",
+      firstName: "Jean",
+      lastName: "Martin",
+      phone: "0612345678",
+      email: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      appointments: [],
+    } as any);
+
+    await updatePatient("patient-1", {
+      firstName: "Jean",
+      lastName: "Martin",
+      phone: "0612345678",
+    });
+
+    expect(revalidatePath).toHaveBeenCalledWith("/dashboard/patients");
+    expect(revalidatePath).toHaveBeenCalledWith("/dashboard/patients/patient-1");
+  });
+});
+
+describe("getPatientById (Story 2.2)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupAuthMock(true);
+  });
+
+  it("2.2-INT-005: devrait retourner le patient avec appointments", async () => {
+    const patientWithAppointments = {
+      id: "patient-1",
+      firstName: "Jean",
+      lastName: "Martin",
+      phone: "0612345678",
+      email: "jean@example.com",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      appointments: [
+        {
+          id: "apt-1",
+          startTime: new Date(),
+          endTime: new Date(),
+          status: "CONFIRMED",
+          type: "consultation",
+        },
+      ],
+    };
+    vi.mocked(prisma.patient.findUnique).mockResolvedValue(
+      patientWithAppointments as any
+    );
+
+    const result = await getPatientById("patient-1");
+
+    expect(result).not.toBeNull();
+    expect(result?.id).toBe("patient-1");
+    expect(result?.appointments).toHaveLength(1);
+    expect(result?.appointments[0].status).toBe("CONFIRMED");
+    expect(prisma.patient.findUnique).toHaveBeenCalledWith({
+      where: { id: "patient-1" },
+      include: {
+        appointments: { orderBy: { startTime: "desc" } },
+      },
+    });
+  });
+
+  it("2.2-INT-006: devrait lever UnauthorizedError si non authentifié", async () => {
+    setupAuthMock(false);
+    await expect(getPatientById("patient-1")).rejects.toThrow(UnauthorizedError);
+    expect(prisma.patient.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("2.2-INT-007: devrait retourner null si id inexistant", async () => {
+    vi.mocked(prisma.patient.findUnique).mockResolvedValue(null);
+
+    const result = await getPatientById("patient-inexistant");
+
+    expect(result).toBeNull();
+  });
+
+  it("devrait retourner null si id vide/undefined", async () => {
+    expect(await getPatientById(undefined)).toBeNull();
+    expect(await getPatientById(null)).toBeNull();
+    expect(await getPatientById("")).toBeNull();
+  });
+});
+
+describe("deletePatient (Story 2.2)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupAuthMock(true);
+  });
+
+  it("2.2-INT-010: devrait supprimer le patient et retourner success", async () => {
+    vi.mocked(prisma.patient.delete).mockResolvedValue({} as any);
+
+    const result = await deletePatient("patient-1");
+
+    expect(result).toEqual({ success: true });
+    expect(prisma.patient.delete).toHaveBeenCalledWith({
+      where: { id: "patient-1" },
+    });
+  });
+
+  it("2.2-INT-011: devrait retourner erreur si non authentifié", async () => {
+    setupAuthMock(false);
+    const result = await deletePatient("patient-1");
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: expect.stringContaining("connecté"),
+      })
+    );
+    expect(prisma.patient.delete).not.toHaveBeenCalled();
+  });
+
+  it("devrait revalider les paths après suppression", async () => {
+    const { revalidatePath } = await import("next/cache");
+    vi.mocked(prisma.patient.delete).mockResolvedValue({} as any);
+
+    await deletePatient("patient-1");
+
+    expect(revalidatePath).toHaveBeenCalledWith("/dashboard/patients");
+    expect(revalidatePath).toHaveBeenCalledWith("/dashboard/patients/patient-1");
   });
 });

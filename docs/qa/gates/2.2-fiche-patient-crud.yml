@@ -1,0 +1,48 @@
+schema: 1
+story: "2.2"
+story_title: "Fiche Patient & CRUD"
+gate: PASS
+status_reason: "Tests automatisés implémentés et exécutés avec succès : schéma Zod (unit), Server Actions create/update/getById/delete (intégration). Tous les scénarios P0 du test design sont couverts."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-01-29T12:35:00Z"
+
+waiver: { active: false }
+
+top_issues: []
+
+risk_summary:
+  totals:
+    critical: 0
+    high: 0
+    medium: 0
+    low: 0
+  recommendations:
+    must_fix: []
+    monitor: []
+
+quality_score: 85
+
+evidence:
+  tests_reviewed: 23
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+
+test_design:
+  scenarios_total: 18
+  by_level:
+    unit: 5
+    integration: 11
+    e2e: 4
+  by_priority:
+    p0: 10
+    p1: 6
+    p2: 2
+  coverage_gaps: []
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Ajouter tests E2E pour modal création, fiche patient et mode édition (2.2-E2E-001 à 2.2-E2E-004) si Playwright ou équivalent est en place"
+      refs: ["docs/qa/assessments/2.2-test-design-20260129.md"]

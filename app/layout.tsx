@@ -14,6 +14,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Toaster } from "@/components/ui/sonner";
 
 /**
  * Police Geist Sans pour le texte principal.
@@ -87,6 +88,8 @@ export default function RootLayout({ children }: RootLayoutProps) {
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen`}
       >
         {children}
+        {/* Toaster global pour les notifications (sonner) */}
+        <Toaster />
       </body>
     </html>
   );
