@@ -1,0 +1,48 @@
+schema: 1
+story: "3.2"
+story_title: "Vue Calendrier"
+gate: PASS
+status_reason: "Test design rédigé. Tests unitaires (calendar-utils) et d'intégration (getAppointmentsByDateRange) ajoutés et exécutés avec succès. Scénarios P0/P1 couverts."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-01-29T14:00:00Z"
+
+waiver: { active: false }
+
+top_issues: []
+
+risk_summary:
+  totals:
+    critical: 0
+    high: 0
+    medium: 0
+    low: 0
+  recommendations:
+    must_fix: []
+    monitor: []
+
+quality_score: 85
+
+evidence:
+  tests_reviewed: 14
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+
+test_design:
+  scenarios_total: 18
+  by_level:
+    unit: 5
+    integration: 9
+    e2e: 4
+  by_priority:
+    p0: 8
+    p1: 8
+    p2: 2
+  coverage_gaps: []
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Ajouter les scénarios E2E 3.2-E2E-001 à 3.2-E2E-006 lorsque le runner E2E calendrier est en place"
+      refs: ["docs/qa/assessments/3.2-test-design-20260129.md"]
