@@ -53,16 +53,45 @@ type CreatePatientResult =
       error: string;
     };
 
+/** Patient minimal retourné après création (pour pré-sélection dans PatientSelect, etc.) */
+export type CreatedPatient = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string;
+};
+
+export interface CreatePatientModalProps {
+  /**
+   * Mode contrôlé: si fournis, le Sheet est contrôlé par le parent (pas de trigger).
+   * Utilisé par PatientSelect pour ouvrir le modal via "Nouveau patient".
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Appelé après création réussie avec le patient créé (rafraîchir liste, pré-sélectionner). */
+  onPatientCreated?: (patient: CreatedPatient) => void;
+}
+
 /**
  * Composant CreatePatientModal.
  *
- * - Gère l'état d'ouverture du Sheet
+ * - Gère l'état d'ouverture du Sheet (ou mode contrôlé via open/onOpenChange)
  * - Gère l'état de soumission (spinner/bouton désactivé)
  * - Centralise l'appel à la Server Action et la gestion des toasts
+ * - En mode contrôlé, pas de bouton trigger (le parent ouvre le modal)
  */
-export function CreatePatientModal() {
-  // État d'ouverture du Sheet
-  const [open, setOpen] = React.useState(false);
+export function CreatePatientModal({
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  onPatientCreated,
+}: CreatePatientModalProps = {}) {
+  const isControlled = controlledOpen !== undefined && controlledOnOpenChange !== undefined;
+  const [internalOpen, setInternalOpen] = React.useState(false);
+
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? controlledOnOpenChange! : setInternalOpen;
+
   // État de soumission (empêche les doublons)
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -71,9 +100,8 @@ export function CreatePatientModal() {
    *
    * - Appelle la Server Action `createPatient`
    * - Affiche des toasts de succès / erreur
+   * - Notifie le parent via onPatientCreated si fourni
    * - Ferme le modal en cas de succès
-   *
-   * Note: la double validation côté serveur est gérée par la Server Action.
    */
   const handleSubmit = React.useCallback(
     async (values: PatientFormValues) => {
@@ -90,15 +118,12 @@ export function CreatePatientModal() {
         }
 
         if (result.success) {
-          // Toast de succès détaillé
           toast.success("Patient créé avec succès", {
             description: `${result.patient.firstName} ${result.patient.lastName} a été ajouté à votre base de patients.`,
           });
-
-          // Fermer le modal
+          onPatientCreated?.(result.patient);
           setOpen(false);
         } else {
-          // Erreur métier renvoyée par la Server Action
           toast.error(result.error || "La création du patient a échoué.");
         }
       } catch (error) {
@@ -110,18 +135,20 @@ export function CreatePatientModal() {
         setIsSubmitting(false);
       }
     },
-    []
+    [onPatientCreated, setOpen]
   );
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      {/* Bouton "Nouveau Patient" qui ouvre le Sheet */}
-      <SheetTrigger asChild>
-        <Button className="bg-[#2563eb] hover:bg-[#2563eb]/90">
-          <Plus className="mr-2 h-4 w-4" />
-          Nouveau Patient
-        </Button>
-      </SheetTrigger>
+      {/* Trigger uniquement en mode non contrôlé (page patients) */}
+      {!isControlled && (
+        <SheetTrigger asChild>
+          <Button className="bg-[#2563eb] hover:bg-[#2563eb]/90">
+            <Plus className="mr-2 h-4 w-4" />
+            Nouveau Patient
+          </Button>
+        </SheetTrigger>
+      )}
 
       {/* Contenu du Sheet (modal latéral) */}
       <SheetContent side="right">

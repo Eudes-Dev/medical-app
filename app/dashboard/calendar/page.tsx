@@ -1,25 +1,21 @@
 "use client";
 
 /**
- * Page Calendrier / Agenda (Story 3.2).
+ * Page Calendrier / Agenda (Story 3.2, 3.3).
  *
  * Affiche l'agenda du praticien sous forme de grille interactive:
  * - Vue Jour: une colonne avec créneaux 8h–20h
  * - Vue Semaine: 7 colonnes avec les mêmes créneaux
  *
- * Les rendez-vous sont chargés via une Server Action et mis en cache
- * dans useCalendarStore pour des transitions fluides. La navigation
- * (précédent / suivant / aujourd'hui) et le mode de vue (jour / semaine)
- * sont gérés par le store.
- *
- * Sur mobile: le détail d'un RDV s'ouvre dans un Sheet (drawer) en bas.
+ * Story 3.3: Clic sur un créneau vide ouvre la modal de création de RDV;
+ * clic sur un RDV ouvre le détail avec options (modifier, statut, supprimer).
+ * Sur mobile le détail s'ouvre en Sheet (drawer), sur desktop en Dialog.
  *
  * @module app/dashboard/calendar/page
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { addDays, format, setHours, startOfWeek } from "date-fns";
-import { fr } from "date-fns/locale";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import {
@@ -35,15 +31,13 @@ import {
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
-import { CalendarGrid } from "@/components/calendar/CalendarGrid";
+  CalendarGrid,
+  getSlotStartTime,
+} from "@/components/calendar/CalendarGrid";
 import { CalendarHeader } from "@/components/calendar/CalendarHeader";
 import { AppointmentCard } from "@/components/calendar/AppointmentCard";
+import { CreateAppointmentModal } from "@/components/calendar/CreateAppointmentModal";
+import { AppointmentDetailsModal } from "@/components/calendar/AppointmentDetailsModal";
 import { getAppointmentsByDateRange } from "@/app/dashboard/calendar/actions";
 import {
   useCalendarStore,
@@ -99,9 +93,15 @@ export default function CalendarPage() {
   const setAppointments = useCalendarStore((s) => s.setAppointments);
 
   const [loading, setLoading] = useState(false);
+  /** RDV sélectionné: ouvre le modal de détails (Story 3.3) */
   const [selectedAppointment, setSelectedAppointment] =
     useState<AppointmentWithPatient | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  /** Modal de création: ouverte au clic sur un créneau vide (Story 3.3) */
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  /** Date/heure de début pré-remplies pour la création (créneau cliqué) */
+  const [createModalDefaultStart, setCreateModalDefaultStart] = useState<
+    Date | undefined
+  >(undefined);
 
   const cacheKey = useMemo(
     () => getCacheKeyForView(pivotDate, viewMode),
@@ -152,10 +152,7 @@ export default function CalendarPage() {
             <AppointmentCard
               key={apt.id}
               appointment={apt}
-              onSelect={(apt) => {
-                setSelectedAppointment(apt);
-                setDrawerOpen(true);
-              }}
+              onSelect={(apt) => setSelectedAppointment(apt)}
             />
           ))}
         </>
@@ -164,9 +161,10 @@ export default function CalendarPage() {
     return content;
   }, [byDay]);
 
-  const handleCloseDrawer = useCallback(() => {
-    setDrawerOpen(false);
-    setSelectedAppointment(null);
+  /** Clic sur un créneau vide: ouvre la modal de création avec date/heure pré-remplies */
+  const handleSlotClick = useCallback((date: Date, slotIndex: number) => {
+    setCreateModalDefaultStart(getSlotStartTime(date, slotIndex));
+    setCreateModalOpen(true);
   }, []);
 
   return (
@@ -196,68 +194,30 @@ export default function CalendarPage() {
             </p>
           )}
 
-          {/* Grille responsive: scroll horizontal sur mobile si vue semaine */}
-        <div className="min-w-0 flex-1 overflow-auto md:overflow-visible">
+          {/* Grille: clic créneau vide = création RDV, clic RDV = détail (Story 3.3) */}
+          <div className="min-w-0 flex-1 overflow-auto md:overflow-visible">
             <CalendarGrid
               pivotDate={pivotDate}
               viewMode={viewMode}
               dayContent={dayContent}
+              onSlotClick={handleSlotClick}
             />
           </div>
         </div>
 
-        {/* Drawer mobile: détail du RDV au clic (Story 3.2 Task 6) */}
-        <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-          <SheetContent
-            side="bottom"
-            className="max-h-[80vh] overflow-y-auto rounded-t-xl"
-          >
-            <SheetHeader>
-              <SheetTitle>Détail du rendez-vous</SheetTitle>
-              <SheetDescription>
-                {selectedAppointment
-                  ? `${selectedAppointment.patient.firstName} ${selectedAppointment.patient.lastName}`
-                  : ""}
-              </SheetDescription>
-            </SheetHeader>
-            {selectedAppointment && (
-              <div className="mt-4 space-y-2 text-sm">
-                <p>
-                  <span className="font-medium">Patient :</span>{" "}
-                  {selectedAppointment.patient.firstName}{" "}
-                  {selectedAppointment.patient.lastName}
-                </p>
-                <p>
-                  <span className="font-medium">Heure :</span>{" "}
-                  {format(selectedAppointment.startTime, "HH:mm", {
-                    locale: fr,
-                  })}{" "}
-                  –{" "}
-                  {format(selectedAppointment.endTime, "HH:mm", {
-                    locale: fr,
-                  })}
-                </p>
-                <p>
-                  <span className="font-medium">Durée :</span>{" "}
-                  {Math.round(
-                    (selectedAppointment.endTime.getTime() -
-                      selectedAppointment.startTime.getTime()) /
-                      (60 * 1000)
-                  )}{" "}
-                  min
-                </p>
-                <p>
-                  <span className="font-medium">Statut :</span>{" "}
-                  {selectedAppointment.status}
-                </p>
-                <p>
-                  <span className="font-medium">Type :</span>{" "}
-                  {selectedAppointment.type}
-                </p>
-              </div>
-            )}
-          </SheetContent>
-        </Sheet>
+        {/* Modal de création de RDV (clic sur créneau vide) */}
+        <CreateAppointmentModal
+          open={createModalOpen}
+          onOpenChange={setCreateModalOpen}
+          defaultStartTime={createModalDefaultStart}
+        />
+
+        {/* Modal de détails RDV (clic sur un RDV) — Dialog desktop, Sheet mobile */}
+        <AppointmentDetailsModal
+          open={!!selectedAppointment}
+          onOpenChange={(open) => !open && setSelectedAppointment(null)}
+          appointment={selectedAppointment}
+        />
       </SidebarInset>
     </SidebarProvider>
   );
