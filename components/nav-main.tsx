@@ -64,7 +64,7 @@ export function NavMain({ items, label = "Navigation" }: NavMainProps) {
             <Collapsible key={item.title} asChild defaultOpen={item.isActive || isActive}>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
-                  <Link href={item.url}>
+                  <Link href={item.url} className="py-5">
                     <item.icon />
                     <span>{item.title}</span>
                   </Link>

@@ -15,8 +15,8 @@
 import * as React from "react";
 import {
   Calendar,
-  Home,
   Settings,
+  LayoutDashboard,
   Stethoscope,
   Users,
 } from "lucide-react";
@@ -47,7 +47,7 @@ const data = {
     {
       title: "Dashboard",
       url: "/dashboard",
-      icon: Home,
+      icon: LayoutDashboard,
       isActive: true,
     },
     {
@@ -87,7 +87,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/dashboard">
-                <div className="bg-[#2563eb] text-white flex aspect-square size-8 items-center justify-center rounded-lg">
+                <div className="bg-primary text-white flex aspect-square size-8 items-center justify-center rounded-lg">
                   <Stethoscope className="size-4" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">

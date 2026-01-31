@@ -30,10 +30,18 @@ import {
   TodayAppointmentsCard,
   UpcomingAppointmentsCard,
 } from "@/components/dashboard/dashboard-stats";
+import { Button } from "@/components/ui/button";
+import { FiUploadCloud } from "react-icons/fi";
+import { BiChevronDown } from "react-icons/bi";
+import DashboardStatistics from "@/components/dashboard/dashboard-statistics";
+import { TopTreatment } from "@/components/dashboard/top-treatment";
+import { PatientStatistics } from "@/components/dashboard/patient-statistics";
+import { DoctorSchedule } from "@/components/dashboard/doctor-schedule";
+import { AppointmentTable } from "@/components/dashboard/appointment-table";
 
 /**
  * Composant carte de statistique.
- * 
+ *
  * Affiche une carte avec une icône, un titre, une valeur et une description.
  * Utilisé pour les statistiques générales du dashboard.
  */
@@ -83,39 +91,82 @@ export default function DashboardPage() {
         </header>
 
         {/* Contenu principal */}
-        <div className="flex flex-1 flex-col gap-4 p-4">
-          {/* Titre de la page */}
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              Bonjour, Dr. Eudes
-            </h1>
-            <p className="text-muted-foreground">
-              Voici un aperçu de votre journée.
-            </p>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+          {/* Titre de la page et boutton d'exportation*/}
+          <div className="flex items-center justify-between">
+            {/* Titre de la page */}
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">
+                Bonjour, Dr. Eudes
+              </h1>
+              <p className="text-muted-foreground">
+                Voici un aperçu de votre journée.
+              </p>
+            </div>
+
+            {/* Boutton d'exportation */}
+            <div>
+              <Button>
+                <FiUploadCloud />
+                Export
+                <BiChevronDown />
+              </Button>
+            </div>
           </div>
 
           {/* Cartes de statistiques */}
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 grid-cols-1 xl:grid-cols-3">
             {/* Carte: Nombre de RDV aujourd'hui - récupérée depuis la base de données */}
-            <TodayAppointmentsCard />
-            
+            {/* <TodayAppointmentsCard /> */}
+
             {/* Statistique: Patients cette semaine */}
             {/* TODO: Implémenter dans une story future avec vraies données */}
-            <StatCard
+            {/* <StatCard
               title="Patients cette semaine"
               value="24"
               description="+12% par rapport à la semaine dernière"
               icon={Users}
-            />
+            /> */}
+
+            <div className="col-span-2 grid md:grid-cols-2 gap-4">
+              <DashboardStatistics
+                title="Patients"
+                count={0}
+                difPercent={0}
+                dif="difference"
+              />
+              <DashboardStatistics
+                title="Nouveau Cette Semaine"
+                count={0}
+                difPercent={0}
+                dif="difference"
+              />
+              <DashboardStatistics
+                title="Alertes Critiques"
+                count={0}
+                difPercent={0}
+                dif="difference"
+              />
+              <DashboardStatistics
+                title="Rendez-vous"
+                count={0}
+                difPercent={0}
+                dif="difference"
+              />
+            </div>
+
+            <div className="w-full">
+              <TopTreatment />
+            </div>
           </div>
 
-          {/* Sections principales */}
-          <div className="grid gap-4 md:grid-cols-2">
+          {/* Sections principales : la grille prend l'espace restant, la ligne fait min 420px */}
+          <div className="grid min-h-0 flex-1 gap-4 grid-cols-1 xl:grid-cols-3 xl:grid-rows-[1fr]">
             {/* Carte: Prochains rendez-vous - récupérée depuis la base de données */}
-            <UpcomingAppointmentsCard />
+            {/* <UpcomingAppointmentsCard /> */}
 
             {/* Activité récente */}
-            <Card>
+            {/* <Card>
               <CardHeader>
                 <CardTitle>Activité récente</CardTitle>
               </CardHeader>
@@ -144,7 +195,20 @@ export default function DashboardPage() {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </Card> */}
+
+            {/* statistique des patients */}
+            <div className="col-span-2 min-h-0 xl:min-h-[420px]">
+              <PatientStatistics />
+            </div>
+
+            <div className="col-span-full xl:col-span-1 flex min-h-0 flex-col xl:min-h-[420px]">
+              <DoctorSchedule />
+            </div>
+          </div>
+
+          <div>
+            <AppointmentTable />
           </div>
         </div>
       </SidebarInset>
