@@ -82,7 +82,7 @@ export default async function PatientDetailPage(
         </header>
 
         {/* Contenu principal: fiche patient */}
-        <main className="flex flex-1 flex-col gap-4 p-4">
+        <main className="flex flex-1 flex-col gap-4 p-4 items-center justify-center">
           <PatientDetailClient patient={patient} />
         </main>
       </SidebarInset>

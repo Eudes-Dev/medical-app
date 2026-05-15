@@ -19,9 +19,15 @@
  * @module lib/prisma
  */
 
+import * as dotenv from "dotenv";
 import { PrismaClient } from "@/lib/generated/prisma/client";
 import type { PrismaClient as PrismaClientType } from "@/lib/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+
+// Charger les variables d'environnement pour les scripts Node (seed, migrations, etc.).
+// En environnement Next.js, les variables sont déjà injectées, cet appel est donc inoffensif.
+dotenv.config({ path: ".env" });
+dotenv.config({ path: ".env.local" });
 
 /**
  * Extension de globalThis pour stocker l'instance Prisma.

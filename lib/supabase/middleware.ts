@@ -71,9 +71,21 @@ export async function updateSession(request: NextRequest) {
   // IMPORTANT: Utiliser getUser() au lieu de getSession() pour la sécurité.
   // getSession() ne valide pas le JWT auprès du serveur Auth.
   // getUser() envoie une requête au serveur Supabase Auth pour valider le token.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user: { id: string } | null = null;
+
+  try {
+    const {
+      data: { user: fetchedUser },
+    } = await supabase.auth.getUser();
+    user = fetchedUser;
+  } catch (err) {
+    // En Edge, un fetch vers l'API Supabase Auth peut échouer (réseau, firewall, DNS).
+    // Repli sur getSession() pour ne pas bloquer l'app (session non validée côté serveur).
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    user = session?.user ?? null;
+  }
 
   return { supabase, user, response: supabaseResponse };
 }
