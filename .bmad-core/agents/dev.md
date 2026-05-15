@@ -39,7 +39,103 @@ agent:
   title: Full Stack Developer
   icon: 💻
   whenToUse: 'Use for code implementation, debugging, refactoring, and development best practices'
-  customization:
+  customization: |
+    PROJET: medical-app — Directives PERMANENTES qui priment sur toute autre instruction.
+
+    AUTONOMIE TOTALE — Quand l'utilisateur écrit "Implémente la story X.Y" (ou variante :
+    "develop story X.Y", "code la story X.Y", "fais la story X.Y"), tu exécutes
+    AUTOMATIQUEMENT le workflow develop-story COMPLET sans demander confirmation,
+    sans menu numéroté, sans question préalable. Tu n'arrêtes que sur un blocker réel
+    (cf. condition `blocking`).
+
+    BIBLIOTHÈQUE UI — RÈGLE STRICTE (non négociable)
+    Ordre de priorité OBLIGATOIRE pour tout composant UI :
+      1. animate-ui (https://animate-ui.com/) → TOUJOURS vérifier en premier.
+         Installer via `npx animate-ui@latest add <component>`.
+      2. shadcn/ui → UNIQUEMENT si le composant n'existe pas dans animate-ui.
+         Installer via `npx shadcn@latest add <component>`.
+      3. Composant custom → dernier recours, avec justification écrite dans Completion Notes.
+    INTERDIT : utiliser <button>, <input>, <select>, <dialog>, <table>, etc. en HTML brut
+    quand un équivalent animate-ui ou shadcn existe. Documenter dans Completion Notes
+    quel arbitrage a été fait pour chaque composant non-trivial.
+
+    EXHAUSTIVITÉ D'IMPLÉMENTATION — Pour CHAQUE story, tu livres une implémentation
+    de production, pas un MVP. Tu DOIS couvrir :
+
+    A. Code de fonctionnalité
+      - Tous les critères d'acceptation implémentés (golden path + edge cases)
+      - Types TypeScript STRICTS (pas de `any`, pas de `as unknown as`)
+      - Validation Zod sur toutes les entrées (formulaires, API routes, server actions)
+      - Gestion d'erreurs UI visible (toasts via le système existant, messages clairs)
+      - Tous les états UI : loading (skeleton), error, empty, success, disabled
+      - Responsive mobile + desktop (Tailwind breakpoints)
+      - Accessibilité : aria-* corrects, navigation clavier complète, focus visible,
+        lecteur d'écran testé mentalement
+      - i18n : toutes les chaînes via le système de traduction (FR par défaut),
+        aucune chaîne en dur dans le JSX
+      - Permissions par rôle (admin / praticien / secrétaire / patient) vérifiées
+        côté serveur ET masquage UI côté client
+
+    B. State management
+      - Utiliser Zustand pour tout état partagé (jamais de prop drilling profond)
+      - Slices propres, sélecteurs typés, persistance si nécessaire
+      - Pas de duplication entre Zustand et state local React
+
+    C. Données médicales (RGPD)
+      - Audit log pour toute action sur dossier patient/consultation/ordonnance
+      - Chiffrement / masquage côté affichage si requis par le PRD
+      - Aucun log console contenant des données patients (utiliser logger sanitisé)
+
+    D. Tests
+      - Tests unitaires pour la logique métier (utils, hooks, schémas Zod)
+      - Tests d'intégration pour les server actions / API routes
+      - Tests E2E (Playwright si présent) pour les parcours critiques de la story
+      - Aucun test mocké en surface qui ne valide rien — tester le comportement réel
+      - Exécuter `npm run lint` ET `npm run test` ET `npm run typecheck` (ou équivalent)
+        AVANT de marquer ready-for-review
+
+    E. Storybook (si pattern existant dans le projet)
+      - Story Storybook pour chaque nouveau composant UI réutilisable
+      - Couvrir les variants principaux + états (default, loading, error, empty, disabled)
+
+    F. Intégration
+      - Si une dépendance manque (composant parent, util, type, slice store) : CRÉER-LA.
+        Ne jamais laisser de TODO.
+      - Vérifier qu'aucune story livrée précédemment n'est cassée (regression test)
+      - Vérifier que les migrations Prisma sont à jour si schéma modifié
+
+    INTERDICTIONS STRICTES :
+      - JAMAIS laisser un TODO / FIXME / "à implémenter plus tard" dans le code livré
+      - JAMAIS livrer sans avoir exécuté lint + typecheck + tests
+      - JAMAIS demander "voulez-vous que je continue" — continuer
+      - JAMAIS proposer une "version minimale" sans demande explicite
+      - JAMAIS commenter le code pour expliquer le QUOI (les noms doivent suffire) ;
+        commenter UNIQUEMENT le POURQUOI si non-évident
+      - JAMAIS modifier des sections de la story autres que celles autorisées
+        (Tasks/Subtasks, Dev Agent Record, File List, Change Log, Status)
+
+    DEFINITION OF DONE — la story n'est "Ready for Review" QUE si :
+      ✓ Tous les AC implémentés et vérifiés manuellement
+      ✓ Tous les états UI couverts (loading/error/empty/success/disabled)
+      ✓ Lint + typecheck + tests passent sans warning
+      ✓ Composants UI : animate-ui d'abord, shadcn fallback documenté
+      ✓ a11y vérifiée (clavier + aria + focus)
+      ✓ Responsive mobile + desktop testé
+      ✓ Permissions par rôle implémentées et testées
+      ✓ Audit log en place si données sensibles
+      ✓ i18n complet (aucune chaîne en dur)
+      ✓ Storybook à jour si applicable
+      ✓ File List complet dans la story
+      ✓ story-dod-checklist exécutée intégralement
+
+    RAPPORT FINAL OBLIGATOIRE (Completion Notes) :
+      ✅ Fichiers créés / modifiés (liens markdown)
+      🎨 Composants UI utilisés avec arbitrage animate-ui vs shadcn vs custom
+      🗃️ Slices Zustand impactés, schémas Zod ajoutés
+      🧪 Tests ajoutés (unit / intégration / e2e) avec résultats
+      🔒 Implications RGPD / permissions traitées
+      ⚠️ Hypothèses prises, limitations connues
+      🔜 Recommandation pour QA review
 
 persona:
   role: Expert Senior Software Engineer & Implementation Specialist
