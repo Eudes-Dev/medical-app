@@ -38,26 +38,25 @@ export const appointmentSchema = z.object({
   patientId: z.string().min(1, "Veuillez sélectionner un patient"),
   /** Date et heure de début du rendez-vous */
   startTime: z
-    .date({ required_error: "La date et l'heure de début sont requises" })
+    .date({ error: "La date et l'heure de début sont requises" })
     .refine((d) => d.getTime() > Date.now(), {
       message: "Le rendez-vous doit être dans le futur",
     }),
   /** Durée en minutes (15, 30, 45, 60) — accepte number ou string (select HTML) */
-  duration: z.coerce
+  duration: z
     .number()
     .refine((n) => APPOINTMENT_DURATIONS.includes(n as (typeof APPOINTMENT_DURATIONS)[number]), {
       message: "Veuillez choisir une durée (15, 30, 45 ou 60 min)",
     }),
   /** Type de consultation */
   type: z.enum(APPOINTMENT_TYPES, {
-    errorMap: () => ({ message: "Veuillez choisir un type de consultation" }),
+    error: "Veuillez choisir un type de consultation",
   }),
   /** Notes optionnelles, limitées à 500 caractères */
   notes: z
     .string()
     .max(500, "Les notes ne peuvent pas dépasser 500 caractères")
-    .optional()
-    .transform((v) => (v === "" || v == null ? undefined : v)),
+    .optional(),
 });
 
 /** Type inféré pour les valeurs du formulaire rendez-vous */

@@ -101,7 +101,7 @@ export function CreateAppointmentModal({
       patientId: editAppointment?.patientId ?? "",
       startTime: editAppointment?.startTime ?? defaultStartTime ?? new Date(),
       duration: durationValid,
-      type: editAppointment?.type ?? "Suivi",
+      type: (editAppointment?.type as AppointmentFormValues["type"]) ?? "Suivi",
       notes: editAppointment?.notes ?? "",
     },
   });
@@ -115,7 +115,7 @@ export function CreateAppointmentModal({
           patientId: editAppointment.patientId,
           startTime: editAppointment.startTime,
           duration: [15, 30, 45, 60].includes(dur) ? dur : 30,
-          type: editAppointment.type,
+          type: editAppointment.type as AppointmentFormValues["type"],
           notes: editAppointment.notes ?? "",
         });
       } else {

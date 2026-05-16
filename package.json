@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint .",
     "seed:user": "tsx scripts/seed-user.ts",
+    "seed:demo": "tsx scripts/seed-demo-data.ts",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run"

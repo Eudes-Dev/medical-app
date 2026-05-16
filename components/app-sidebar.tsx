@@ -14,11 +14,17 @@
 
 import * as React from "react";
 import {
+  BarChart3,
   Calendar,
-  Settings,
+  Clock,
+  CreditCard,
+  HelpCircle,
   LayoutDashboard,
+  MessageSquare,
+  Settings,
   Stethoscope,
   Users,
+  Video,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -60,12 +66,42 @@ const data = {
       url: "/dashboard/patients",
       icon: Users,
     },
+    {
+      title: "Liste d'attente",
+      url: "/dashboard/waitlist",
+      icon: Clock,
+    },
+    {
+      title: "Téléconsultation",
+      url: "/dashboard/teleconsultation",
+      icon: Video,
+    },
+    {
+      title: "Communication",
+      url: "/dashboard/communication",
+      icon: MessageSquare,
+    },
+    {
+      title: "Facturation",
+      url: "/dashboard/billing",
+      icon: CreditCard,
+    },
+    {
+      title: "Statistiques",
+      url: "/dashboard/analytics",
+      icon: BarChart3,
+    },
   ],
   navSecondary: [
     {
       title: "Paramètres",
       url: "/dashboard/settings",
       icon: Settings,
+    },
+    {
+      title: "Aide & Support",
+      url: "/dashboard/help",
+      icon: HelpCircle,
     },
   ],
 };

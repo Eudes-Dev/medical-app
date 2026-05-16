@@ -11,7 +11,18 @@
  * @module app/dashboard/page
  */
 
-import { Users } from "lucide-react";
+import {
+  AlertCircle,
+  CalendarCheck2,
+  CalendarClock,
+  CalendarDays,
+  Download,
+  FileText,
+  Gauge,
+  Plus,
+  UserPlus2,
+  Video,
+} from "lucide-react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import {
@@ -20,66 +31,54 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import {
-  TodayAppointmentsCard,
-  UpcomingAppointmentsCard,
-} from "@/components/dashboard/dashboard-stats";
 import { Button } from "@/components/ui/button";
-import { FiUploadCloud } from "react-icons/fi";
-import { BiChevronDown } from "react-icons/bi";
-import DashboardStatistics from "@/components/dashboard/dashboard-statistics";
-import { TopTreatment } from "@/components/dashboard/top-treatment";
-import { PatientStatistics } from "@/components/dashboard/patient-statistics";
-import { DoctorSchedule } from "@/components/dashboard/doctor-schedule";
-import { AppointmentTable } from "@/components/dashboard/appointment-table";
+import { KpiCards } from "@/components/dashboard/kpi-cards";
+import type {
+  KpiCardData,
+  KpiTrend,
+} from "@/components/dashboard/kpi-cards";
+import { TodayOverview } from "@/components/dashboard/today-overview";
+import type {
+  AlertItem,
+  Consultation,
+  ConsultationRange,
+} from "@/components/dashboard/today-overview";
+import { AlertsCard } from "@/components/dashboard/today-overview/alerts-card";
+import { ConsultationsCard } from "@/components/dashboard/today-overview/consultations-card";
+import { ActivityOverview } from "@/components/dashboard/activity-overview";
+import { PatientsEvolutionCard } from "@/components/dashboard/activity-overview/patients-evolution-card";
+import { TopTreatmentsCard } from "@/components/dashboard/activity-overview/top-treatments-card";
+import { ActivityCalendarCard } from "@/components/dashboard/activity-overview/activity-calendar-card";
+import { DailyAppointmentsTable } from "@/components/dashboard/daily-appointments";
 
-/**
- * Composant carte de statistique.
- *
- * Affiche une carte avec une icône, un titre, une valeur et une description.
- * Utilisé pour les statistiques générales du dashboard.
- */
-function StatCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-}: {
-  title: string;
-  value: string;
-  description: string;
-  icon: React.ElementType;
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </CardContent>
-    </Card>
-  );
-}
+import {
+  getDashboardOverview,
+  type DashboardAlerts,
+  type DashboardKpis,
+} from "./overview-data";
+
+export const dynamic = "force-dynamic";
 
 /**
  * Page principale du dashboard.
  */
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const overview = await getDashboardOverview();
+
+  const kpiCards = buildKpiCards(overview.kpis);
+  const alerts = buildAlerts(overview.alerts);
+
   return (
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
         {/* Header */}
-        <header className="flex h-16 shrink-0 items-center gap-2  px-4">
+        <header className="flex h-16 shrink-0 items-center gap-2 px-4">
           <SidebarTrigger className="-ml-1" />
           <Breadcrumb>
             <BreadcrumbList>
@@ -91,127 +90,248 @@ export default function DashboardPage() {
         </header>
 
         {/* Contenu principal */}
-        <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
-          {/* Titre de la page et boutton d'exportation*/}
-          <div className="flex items-center justify-between">
-            {/* Titre de la page */}
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">
-                Bonjour, Dr. Eudes
-              </h1>
-              <p className="text-muted-foreground">
-                Voici un aperçu de votre journée.
-              </p>
-            </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-9 p-4">
+          <OverviewHeader />
 
-            {/* Boutton d'exportation */}
-            <div>
-              <Button>
-                <FiUploadCloud />
-                Export
-                <BiChevronDown />
-              </Button>
-            </div>
-          </div>
+          <KpiCards cards={kpiCards} />
 
-          {/* Cartes de statistiques */}
-          <div className="grid gap-4 grid-cols-1 xl:grid-cols-3">
-            {/* Carte: Nombre de RDV aujourd'hui - récupérée depuis la base de données */}
-            {/* <TodayAppointmentsCard /> */}
+          <TodayOverviewSection
+            alerts={alerts}
+            consultations={overview.consultations}
+          />
 
-            {/* Statistique: Patients cette semaine */}
-            {/* TODO: Implémenter dans une story future avec vraies données */}
-            {/* <StatCard
-              title="Patients cette semaine"
-              value="24"
-              description="+12% par rapport à la semaine dernière"
-              icon={Users}
-            /> */}
+          <ActivityOverviewSection
+            patientsEvolution={overview.patientsEvolution}
+            topTreatments={
+              overview.topTreatments.length > 0
+                ? overview.topTreatments
+                : undefined
+            }
+            activityMonth={overview.activityMonth}
+          />
 
-            <div className="col-span-2 grid md:grid-cols-2 gap-4">
-              <DashboardStatistics
-                title="Patients"
-                count={0}
-                difPercent={0}
-                dif="difference"
-              />
-              <DashboardStatistics
-                title="Nouveau Cette Semaine"
-                count={0}
-                difPercent={0}
-                dif="difference"
-              />
-              <DashboardStatistics
-                title="Alertes Critiques"
-                count={0}
-                difPercent={0}
-                dif="difference"
-              />
-              <DashboardStatistics
-                title="Rendez-vous"
-                count={0}
-                difPercent={0}
-                dif="difference"
-              />
-            </div>
-
-            <div className="w-full">
-              <TopTreatment />
-            </div>
-          </div>
-
-          {/* Sections principales : la grille prend l'espace restant, la ligne fait min 420px */}
-          <div className="grid min-h-0 flex-1 gap-4 grid-cols-1 xl:grid-cols-3 xl:grid-rows-[1fr]">
-            {/* Carte: Prochains rendez-vous - récupérée depuis la base de données */}
-            {/* <UpcomingAppointmentsCard /> */}
-
-            {/* Activité récente */}
-            {/* <Card>
-              <CardHeader>
-                <CardTitle>Activité récente</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {[
-                    { action: "Nouveau patient ajouté", detail: "Sophie Leroy", time: "Il y a 2h" },
-                    { action: "RDV confirmé", detail: "Jean Martin - 10:30", time: "Il y a 3h" },
-                    { action: "Note ajoutée", detail: "Dossier Marie Dupont", time: "Hier" },
-                    { action: "RDV annulé", detail: "Paul Moreau", time: "Hier" },
-                  ].map((activity, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0"
-                    >
-                      <div>
-                        <p className="font-medium">{activity.action}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {activity.detail}
-                        </p>
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        {activity.time}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card> */}
-
-            {/* statistique des patients */}
-            <div className="col-span-2 min-h-0 xl:min-h-[420px]">
-              <PatientStatistics />
-            </div>
-
-            <div className="col-span-full xl:col-span-1 flex min-h-0 flex-col xl:min-h-[420px]">
-              <DoctorSchedule />
-            </div>
-          </div>
-
-          <div>
-            <AppointmentTable />
-          </div>
+          <DailyAppointmentsTable
+            appointments={overview.dailyAppointments.items}
+            total={overview.dailyAppointments.total}
+          />
         </div>
       </SidebarInset>
     </SidebarProvider>
+  );
+}
+
+// ============================================================================
+// Builders de props (server-side : icônes injectées ici)
+// ============================================================================
+
+function trendFromPercent(p: number): KpiTrend {
+  if (p > 0) return "up";
+  if (p < 0) return "down";
+  return "neutral";
+}
+
+function buildKpiCards(kpis: DashboardKpis): KpiCardData[] {
+  return [
+    {
+      id: "rdv-today",
+      title: "RDV aujourd'hui",
+      value: String(kpis.rdvToday.value),
+      unit: `/ ${kpis.rdvToday.capacity}`,
+      icon: <CalendarCheck2 />,
+      tone: "primary",
+      trend: trendFromPercent(kpis.rdvToday.trendPercent),
+      trendLabel: `${kpis.rdvToday.trendPercent > 0 ? "+" : ""}${kpis.rdvToday.trendPercent}%`,
+      trendIsPositive: kpis.rdvToday.trendPercent >= 0,
+      data: kpis.rdvToday.sparkline,
+    },
+    {
+      id: "new-patients",
+      title: "Nouveaux patients",
+      suffix: "(7j)",
+      value: String(kpis.newPatients.value),
+      icon: <UserPlus2 />,
+      tone: "success",
+      trend: trendFromPercent(kpis.newPatients.trendDelta),
+      trendLabel: `${kpis.newPatients.trendDelta > 0 ? "+" : ""}${kpis.newPatients.trendDelta}`,
+      trendIsPositive: kpis.newPatients.trendDelta >= 0,
+      data: kpis.newPatients.sparkline,
+    },
+    {
+      id: "fill-rate",
+      title: "Taux de remplissage",
+      value: String(kpis.fillRate.value),
+      unit: "%",
+      icon: <Gauge />,
+      tone: "violet",
+      trend: trendFromPercent(kpis.fillRate.trendPercent),
+      trendLabel: `${kpis.fillRate.trendPercent > 0 ? "+" : ""}${kpis.fillRate.trendPercent}%`,
+      trendIsPositive: kpis.fillRate.trendPercent >= 0,
+      data: kpis.fillRate.sparkline,
+    },
+    {
+      id: "no-shows",
+      title: "No-shows",
+      suffix: "(30j)",
+      value: kpis.noShows.value.toFixed(1),
+      unit: "%",
+      icon: <AlertCircle />,
+      tone: "amber",
+      // Pour les no-shows une baisse est positive
+      trend: trendFromPercent(kpis.noShows.trendPercent),
+      trendLabel: `${kpis.noShows.trendPercent > 0 ? "+" : ""}${kpis.noShows.trendPercent}%`,
+      trendIsPositive: kpis.noShows.trendPercent <= 0,
+      data: kpis.noShows.sparkline,
+    },
+  ];
+}
+
+function buildAlerts(alerts: DashboardAlerts): AlertItem[] {
+  const items: AlertItem[] = [];
+
+  if (alerts.pendingCount > 0) {
+    items.push({
+      id: "rdv-confirm",
+      title: "RDV à confirmer",
+      description: `${alerts.pendingCount} demande${alerts.pendingCount > 1 ? "s" : ""} en attente`,
+      tone: "warning",
+      icon: <CalendarClock />,
+      count: alerts.pendingCount,
+    });
+  }
+
+  if (alerts.upcomingTeleconsultationCount > 0) {
+    items.push({
+      id: "teleconsultations",
+      title: "Téléconsultations",
+      description: `${alerts.upcomingTeleconsultationCount} à venir cette semaine`,
+      tone: "primary",
+      icon: <Video />,
+      count: alerts.upcomingTeleconsultationCount,
+    });
+  }
+
+  if (alerts.todayCancelledCount > 0) {
+    items.push({
+      id: "today-cancelled",
+      title: "Annulations du jour",
+      description: `${alerts.todayCancelledCount} RDV annulé${alerts.todayCancelledCount > 1 ? "s" : ""}`,
+      tone: "danger",
+      icon: <FileText />,
+      count: alerts.todayCancelledCount,
+    });
+  }
+
+  if (items.length === 0) {
+    items.push({
+      id: "all-clear",
+      title: "Aucune alerte",
+      description: "Tout est à jour ✨",
+      tone: "info",
+      icon: <CalendarClock />,
+    });
+  }
+
+  return items;
+}
+
+// ============================================================================
+// Sections (server components qui passent les props dynamiques)
+// ============================================================================
+
+function TodayOverviewSection({
+  alerts,
+  consultations,
+}: {
+  alerts: AlertItem[];
+  consultations: Record<ConsultationRange, Consultation[]>;
+}) {
+  // On reproduit la structure de TodayOverview (grid 1/3 + 2/3) pour pouvoir
+  // injecter les props dynamiques aux deux sous-cards.
+  void TodayOverview; // garde l'import pour le tree-shaking documenté
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <AlertsCard alerts={alerts} className="lg:col-span-1" />
+      <ConsultationsCard data={consultations} className="lg:col-span-2" />
+    </div>
+  );
+}
+
+function ActivityOverviewSection({
+  patientsEvolution,
+  topTreatments,
+  activityMonth,
+}: {
+  patientsEvolution: Parameters<typeof PatientsEvolutionCard>[0]["data"];
+  topTreatments: Parameters<typeof TopTreatmentsCard>[0]["treatments"];
+  activityMonth: Parameters<typeof ActivityCalendarCard>[0]["month"];
+}) {
+  void ActivityOverview;
+  return (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-7">
+      <PatientsEvolutionCard
+        data={patientsEvolution}
+        className="md:col-span-2 xl:col-span-3"
+      />
+      <TopTreatmentsCard
+        treatments={topTreatments}
+        className="xl:col-span-2"
+      />
+      <ActivityCalendarCard
+        month={activityMonth}
+        className="xl:col-span-2"
+      />
+    </div>
+  );
+}
+
+function OverviewHeader() {
+  const today = new Date();
+  const formattedDate = new Intl.DateTimeFormat("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(today);
+
+  return (
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between animate-in fade-in slide-in-from-top-2 duration-500">
+      <div className="space-y-1">
+        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
+          <span className="bg-linear-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+            Bonjour, Dr. Eudes
+          </span>
+          <span
+            aria-hidden
+            className="inline-block origin-[70%_70%] text-primary motion-safe:animate-[wave_2.4s_ease-in-out_infinite]"
+          >
+            👋
+          </span>
+        </h1>
+        <p className="text-sm capitalize text-muted-foreground">
+          {formattedDate}
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="outline"
+          className="group bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+        >
+          <CalendarDays className="transition-transform group-hover:scale-110" />
+          Aujourd&apos;hui
+        </Button>
+        <Button
+          variant="outline"
+          className="group bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+        >
+          <Download className="transition-transform group-hover:translate-y-0.5" />
+          Exporter
+        </Button>
+        <Button className="group shadow-sm shadow-primary/30 transition-all hover:-translate-y-0.5 hover:shadow-md hover:shadow-primary/40">
+          <Plus className="transition-transform group-hover:rotate-90" />
+          Nouveau
+        </Button>
+      </div>
+    </div>
   );
 }
