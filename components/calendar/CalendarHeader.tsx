@@ -3,10 +3,13 @@
 /**
  * En-tête du calendrier (Story 3.2 - Task 1).
  *
- * Affiche:
- * - Le titre de la période courante (ex: "Semaine du 20 janvier 2026" ou "Mercredi 29 janvier 2026")
- * - Les boutons de navigation: précédent, aujourd'hui, suivant
- * - Le sélecteur de vue: jour / semaine
+ * Refonte UI/UX :
+ * - Titre dégradé "Semaine du 18 au 24 mai" + sous-titre avec un pulse dot vert
+ *   indiquant le nombre de rendez-vous actifs sur la période.
+ * - Navigation compacte (précédent / aujourd'hui / suivant) avec hover surélevé.
+ * - Toggle Jour / Semaine façon segmented control avec icônes Sun / Calendar.
+ * - CTA principal "Nouveau RDV" coloré (palette secondary = vert médical) avec
+ *   animation du Plus au hover.
  *
  * S'appuie sur useCalendarStore pour pivotDate et viewMode, et appelle
  * goToPrevious, goToToday, goToNext, setViewMode.
@@ -14,44 +17,65 @@
  * @module components/calendar/CalendarHeader
  */
 
-import { format, isSameDay, startOfWeek } from "date-fns";
+import { format, isSameDay, isSameMonth, addDays, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  CalendarDays,
+  CalendarRange,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Sun,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   useCalendarStore,
   type ViewMode,
 } from "@/stores/useCalendarStore";
 
-/** Options de vue affichées dans le sélecteur */
-const VIEW_OPTIONS: { value: ViewMode; label: string }[] = [
-  { value: "day", label: "Jour" },
-  { value: "week", label: "Semaine" },
+/** Options de vue affichées dans le segmented control (avec leur icône). */
+const VIEW_OPTIONS: { value: ViewMode; label: string; Icon: typeof Sun }[] = [
+  { value: "day", label: "Jour", Icon: Sun },
+  { value: "week", label: "Semaine", Icon: CalendarRange },
 ];
 
 /**
- * Formate le titre de la période selon le mode (jour ou semaine).
+ * Construit le titre de la période selon le mode (jour ou semaine).
  * - Jour: "Mercredi 29 janvier 2026"
- * - Semaine: "Semaine du 20 janvier 2026" (début de semaine)
+ * - Semaine (même mois): "Semaine du 18 au 24 mai"
+ * - Semaine (mois différents): "Semaine du 28 avr. au 4 mai"
  */
 function getPeriodTitle(pivotDate: Date, viewMode: ViewMode): string {
   if (viewMode === "day") {
     return format(pivotDate, "EEEE d MMMM yyyy", { locale: fr });
   }
-  // Vue semaine: on affiche "Semaine du [premier jour de la semaine]"
   const start = startOfWeek(pivotDate, { weekStartsOn: 1 });
-  return `Semaine du ${format(start, "d MMMM yyyy", { locale: fr })}`;
+  const end = addDays(start, 6);
+  // Si la semaine couvre un seul mois, on factorise le mois (compact et lisible).
+  if (isSameMonth(start, end)) {
+    return `Semaine du ${format(start, "d", { locale: fr })} au ${format(end, "d MMMM", { locale: fr })}`;
+  }
+  return `Semaine du ${format(start, "d MMM", { locale: fr })} au ${format(end, "d MMM yyyy", { locale: fr })}`;
 }
 
-/**
- * Indique si la date pivot est aujourd'hui (pour désactiver ou styliser "Aujourd'hui").
- */
+/** Indique si la date pivot est aujourd'hui (pour styliser le bouton "Aujourd'hui"). */
 function isToday(pivotDate: Date): boolean {
   return isSameDay(pivotDate, new Date());
 }
 
-export function CalendarHeader() {
+export interface CalendarHeaderProps {
+  /** Nombre total de RDV actifs (non-annulés) sur la période affichée. */
+  appointmentCount?: number;
+  /** Handler du CTA "Nouveau RDV" (ouvre la modal de création sans pré-remplir). */
+  onNewAppointment?: () => void;
+}
+
+export function CalendarHeader({
+  appointmentCount = 0,
+  onNewAppointment,
+}: CalendarHeaderProps) {
   const pivotDate = useCalendarStore((s) => s.pivotDate);
   const viewMode = useCalendarStore((s) => s.viewMode);
   const goToPrevious = useCalendarStore((s) => s.goToPrevious);
@@ -61,63 +85,118 @@ export function CalendarHeader() {
 
   const periodTitle = getPeriodTitle(pivotDate, viewMode);
   const today = isToday(pivotDate);
+  const countLabel = `${appointmentCount} rendez-vous actif${appointmentCount > 1 ? "s" : ""}`;
 
   return (
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      {/* Titre de la période */}
-      <h2 className="text-lg font-semibold capitalize text-foreground md:text-xl">
-        {periodTitle}
-      </h2>
+    <header
+      className={cn(
+        // Fade-in + slide depuis le haut au montage pour une entrée douce.
+        "flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between",
+        "animate-in fade-in slide-in-from-top-2 duration-500"
+      )}
+    >
+      {/* ===== Bloc gauche : Titre + sous-titre compteur ===== */}
+      <div className="space-y-1.5">
+        {/* Titre principal avec dégradé subtil pour la profondeur visuelle */}
+        <h2 className="text-xl font-bold capitalize tracking-tight md:text-2xl">
+          <span className="bg-linear-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+            {periodTitle}
+          </span>
+        </h2>
 
-      {/* Contrôles: navigation + sélecteur de vue */}
+        {/* Sous-titre : pulse dot vert + compteur de RDV actifs */}
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="relative flex h-2 w-2">
+            {/* Pulse animé en arrière-plan (visible uniquement s'il y a des RDV) */}
+            {appointmentCount > 0 && (
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+            )}
+            <span
+              className={cn(
+                "relative inline-flex h-2 w-2 rounded-full",
+                appointmentCount > 0 ? "bg-emerald-500" : "bg-muted-foreground/40"
+              )}
+            />
+          </span>
+          <span className="font-medium">{countLabel}</span>
+        </div>
+      </div>
+
+      {/* ===== Bloc droit : Contrôles + CTA ===== */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Navigation: précédent / aujourd'hui / suivant */}
-        <div className="flex items-center gap-1 rounded-md border border-border p-1">
+        {/* --- Groupe Navigation : précédent / aujourd'hui / suivant --- */}
+        <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1 shadow-sm">
           <Button
             variant="ghost"
-            size="icon"
-            className="h-8 w-8"
+            size="icon-sm"
+            className="rounded-md transition-transform hover:-translate-x-0.5"
             onClick={() => goToPrevious()}
             aria-label="Période précédente"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft />
           </Button>
           <Button
             variant={today ? "secondary" : "ghost"}
             size="sm"
-            className="h-8 px-3"
+            className={cn(
+              "rounded-md font-medium",
+              today && "shadow-sm shadow-secondary/30"
+            )}
             onClick={() => goToToday()}
             aria-label="Aller à aujourd'hui"
           >
+            <CalendarDays />
             Aujourd&apos;hui
           </Button>
           <Button
             variant="ghost"
-            size="icon"
-            className="h-8 w-8"
+            size="icon-sm"
+            className="rounded-md transition-transform hover:translate-x-0.5"
             onClick={() => goToNext()}
             aria-label="Période suivante"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight />
           </Button>
         </div>
 
-        {/* Sélecteur de vue: Jour / Semaine */}
-        <div className="flex items-center gap-1 rounded-md border border-border p-1">
-          {VIEW_OPTIONS.map((opt) => (
-            <Button
-              key={opt.value}
-              variant={viewMode === opt.value ? "secondary" : "ghost"}
-              size="sm"
-              className="h-8 px-3"
-              onClick={() => setViewMode(opt.value)}
-              aria-label={`Vue ${opt.label}`}
-              aria-pressed={viewMode === opt.value}
-            >
-              {opt.label}
-            </Button>
-          ))}
+        {/* --- Segmented control Jour / Semaine --- */}
+        <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1 shadow-sm">
+          {VIEW_OPTIONS.map((opt) => {
+            const active = viewMode === opt.value;
+            const Icon = opt.Icon;
+            return (
+              <Button
+                key={opt.value}
+                variant={active ? "secondary" : "ghost"}
+                size="sm"
+                className={cn(
+                  "rounded-md font-medium transition-all",
+                  active && "shadow-sm shadow-secondary/30"
+                )}
+                onClick={() => setViewMode(opt.value)}
+                aria-label={`Vue ${opt.label}`}
+                aria-pressed={active}
+              >
+                <Icon className={cn("transition-transform", active && "scale-110")} />
+                {opt.label}
+              </Button>
+            );
+          })}
         </div>
+
+        {/* --- CTA principal : Nouveau RDV (palette secondary = vert médical) --- */}
+        <Button
+          onClick={onNewAppointment}
+          className={cn(
+            "group bg-secondary text-secondary-foreground",
+            "shadow-sm shadow-secondary/40 transition-all",
+            "hover:-translate-y-0.5 hover:bg-secondary/90 hover:shadow-md hover:shadow-secondary/50"
+          )}
+          aria-label="Créer un nouveau rendez-vous"
+        >
+          <Plus className="transition-transform group-hover:rotate-90" />
+          Nouveau RDV
+        </Button>
       </div>
     </header>
   );

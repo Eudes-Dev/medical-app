@@ -44,6 +44,12 @@ export interface PatientSelectProps {
   disabled?: boolean;
   /** Id du champ pour l'accessibilité */
   id?: string;
+  /** Libellé personnalisé (ReactNode pour permettre l'astérisque rouge, etc.). Défaut: "Patient" */
+  label?: React.ReactNode;
+  /** Placeholder du champ de recherche */
+  placeholder?: string;
+  /** Masquer complètement le libellé (utile si le parent gère son propre titre) */
+  hideLabel?: boolean;
 }
 
 /**
@@ -64,6 +70,9 @@ export function PatientSelect({
   error,
   disabled,
   id: propId,
+  label = "Patient",
+  placeholder = "Rechercher par nom ou email…",
+  hideLabel = false,
 }: PatientSelectProps) {
   const generatedId = React.useId();
   const inputId = propId ?? generatedId;
@@ -159,7 +168,7 @@ export function PatientSelect({
 
   return (
     <div ref={containerRef} className="relative space-y-2">
-      <Label htmlFor={inputId}>Patient</Label>
+      {!hideLabel && <Label htmlFor={inputId}>{label}</Label>}
       <div
         className={cn(
           "flex rounded-md border bg-background transition-colors",
@@ -177,7 +186,7 @@ export function PatientSelect({
               setOpen(true);
             }}
             onFocus={() => setOpen(true)}
-            placeholder="Rechercher par nom ou email…"
+            placeholder={placeholder}
             disabled={disabled}
             className="border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
             aria-expanded={open}

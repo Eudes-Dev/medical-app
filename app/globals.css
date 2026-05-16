@@ -226,6 +226,23 @@
   50% { transform: rotate(10deg); }
 }
 
+/**
+ * Motif hachuré rose utilisé pour signaler une colonne "surchargée" dans
+ * l'agenda (calendrier). On utilise un linear-gradient répété pour rester
+ * léger (pas d'image, GPU-friendly).
+ *
+ * Utilisation: <div class="calendar-overload-pattern" />
+ */
+.calendar-overload-pattern {
+  background-image: repeating-linear-gradient(
+    45deg,
+    color-mix(in oklab, var(--destructive) 6%, transparent) 0px,
+    color-mix(in oklab, var(--destructive) 6%, transparent) 8px,
+    transparent 8px,
+    transparent 16px
+  );
+}
+
 /* ============================================
    CLASSES UTILITAIRES MÉDICALES
    ============================================

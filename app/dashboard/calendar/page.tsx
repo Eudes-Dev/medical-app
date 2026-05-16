@@ -143,6 +143,25 @@ export default function CalendarPage() {
     [appointments]
   );
 
+  /**
+   * Compteur de RDV actifs par jour (clé YYYY-MM-DD).
+   * On exclut les RDV annulés pour le badge de chaque colonne, car ils ne
+   * comptent pas dans la charge réelle de la journée.
+   */
+  const dayCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const [dayKey, list] of Object.entries(byDay)) {
+      counts[dayKey] = list.filter((a) => a.status !== "CANCELLED").length;
+    }
+    return counts;
+  }, [byDay]);
+
+  /** Total de RDV actifs sur la période affichée (utilisé dans le sous-titre du header). */
+  const activeAppointmentCount = useMemo(
+    () => appointments.filter((a) => a.status !== "CANCELLED").length,
+    [appointments]
+  );
+
   const dayContent = useMemo(() => {
     const content: Record<string, React.ReactNode> = {};
     for (const [dayKey, list] of Object.entries(byDay)) {
@@ -167,6 +186,15 @@ export default function CalendarPage() {
     setCreateModalOpen(true);
   }, []);
 
+  /**
+   * Clic sur le CTA "Nouveau RDV" du header : ouvre la modal sans pré-remplir
+   * (l'utilisateur choisit lui-même la date/heure dans le formulaire).
+   */
+  const handleNewAppointment = useCallback(() => {
+    setCreateModalDefaultStart(undefined);
+    setCreateModalOpen(true);
+  }, []);
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -185,11 +213,15 @@ export default function CalendarPage() {
           </Breadcrumb>
         </header>
 
-        <div className="flex flex-1 flex-col gap-4 p-4">
-          <CalendarHeader />
+        <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+          {/* Header : titre + compteur RDV actifs + nav + toggle vue + CTA */}
+          <CalendarHeader
+            appointmentCount={activeAppointmentCount}
+            onNewAppointment={handleNewAppointment}
+          />
 
           {loading && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground animate-pulse">
               Chargement des rendez-vous…
             </p>
           )}
@@ -200,6 +232,7 @@ export default function CalendarPage() {
               pivotDate={pivotDate}
               viewMode={viewMode}
               dayContent={dayContent}
+              dayCounts={dayCounts}
               onSlotClick={handleSlotClick}
             />
           </div>
