@@ -36,7 +36,8 @@ import type {
   PatientAppointment,
 } from "@/app/dashboard/patients/actions";
 import { updatePatient, deletePatient } from "@/app/dashboard/patients/actions";
-import { toast } from "@/components/ui/sonner";
+import { showError, showSuccess } from "@/lib/ui/toast";
+import { TOAST_MESSAGES } from "@/lib/ui/toast-messages";
 
 /**
  * Props du composant PatientDetailClient.
@@ -153,22 +154,20 @@ export function PatientDetailClient({ patient }: PatientDetailClientProps) {
         });
 
         if (!result.success) {
-          toast.error(result.error);
+          showError(TOAST_MESSAGES.errors.validation);
           return;
         }
 
         setCurrentPatient(result.patient);
         setIsEditing(false);
 
-        toast.success("Patient mis à jour avec succès");
+        showSuccess(TOAST_MESSAGES.patient.updated);
 
         // Recharger doucement la page pour refléter les données serveur
         router.refresh();
       } catch (error) {
         console.error("[PatientDetailClient] updatePatient error:", error);
-        toast.error(
-          "Une erreur est survenue lors de la mise à jour du patient.",
-        );
+        showError(TOAST_MESSAGES.errors.server);
       } finally {
         setIsSubmitting(false);
       }
@@ -195,18 +194,18 @@ export function PatientDetailClient({ patient }: PatientDetailClientProps) {
       const result = await deletePatient(currentPatient.id);
 
       if (!result.success) {
-        toast.error(result.error);
+        showError(TOAST_MESSAGES.errors.server);
         return;
       }
 
-      toast.success("Patient supprimé avec succès");
+      showSuccess(TOAST_MESSAGES.patient.deleted);
 
       // Retour à la liste des patients
       router.push("/dashboard/patients");
       router.refresh();
     } catch (error) {
       console.error("[PatientDetailClient] deletePatient error:", error);
-      toast.error("Une erreur est survenue lors de la suppression du patient.");
+      showError(TOAST_MESSAGES.errors.server);
     } finally {
       setIsSubmitting(false);
     }

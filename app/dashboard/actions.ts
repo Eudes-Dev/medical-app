@@ -9,8 +9,8 @@
  * @module app/dashboard/actions
  */
 
-import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/server/auth";
 import { UnauthorizedError } from "@/lib/errors";
 
 /**
@@ -54,19 +54,7 @@ export type DashboardStats = {
  */
 export async function getDashboardStats(): Promise<DashboardStats> {
   try {
-    // Vérifier l'authentification via Supabase Auth
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    // Si l'utilisateur n'est pas authentifié, lever une erreur explicite
-    // (le middleware devrait normalement empêcher l'accès, mais double vérification)
-    if (!user) {
-      throw new UnauthorizedError(
-        "User must be authenticated to access dashboard statistics"
-      );
-    }
+    await requireUser();
 
     // Calculer le début et la fin de la journée actuelle (UTC)
     const now = new Date();

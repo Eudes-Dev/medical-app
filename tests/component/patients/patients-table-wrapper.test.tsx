@@ -127,6 +127,42 @@ describe("PatientsTableWrapper E2E", () => {
     });
   });
 
+  it("story 5.1 AC 8 — affiche un EmptyState « Aucun patient » quand la liste est vide", async () => {
+    vi.mocked(getPatients).mockResolvedValue({ patients: [], total: 0 });
+
+    render(<PatientsTableWrapper />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Aucun patient pour le moment"),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("story 5.1 AC 8 — affiche un EmptyState « Aucun résultat » quand la recherche ne retourne rien", async () => {
+    const user = userEvent.setup();
+    vi.mocked(getPatients)
+      .mockResolvedValueOnce({ patients: mockPatients, total: mockPatients.length })
+      .mockResolvedValue({ patients: [], total: 0 });
+
+    render(<PatientsTableWrapper />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Martin")).toBeInTheDocument();
+    });
+
+    const searchInput = screen.getByPlaceholderText(
+      "Rechercher par nom, prénom ou email...",
+    );
+    await user.type(searchInput, "Xyz");
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Aucun résultat pour « Xyz »/),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("devrait gérer les erreurs de chargement", async () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(getPatients).mockRejectedValue(new Error("Network error"));

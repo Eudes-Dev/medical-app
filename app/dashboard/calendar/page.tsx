@@ -34,7 +34,11 @@ import {
   CalendarGrid,
   getSlotStartTime,
 } from "@/components/calendar/CalendarGrid";
+import { CalendarSkeleton } from "@/components/calendar/CalendarSkeleton";
 import { CalendarHeader } from "@/components/calendar/CalendarHeader";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
+import { CalendarOff } from "lucide-react";
 import { AppointmentCard } from "@/components/calendar/AppointmentCard";
 import { CreateAppointmentModal } from "@/components/calendar/CreateAppointmentModal";
 import { AppointmentDetailsModal } from "@/components/calendar/AppointmentDetailsModal";
@@ -220,21 +224,34 @@ export default function CalendarPage() {
             onNewAppointment={handleNewAppointment}
           />
 
-          {loading && (
-            <p className="text-sm text-muted-foreground animate-pulse">
-              Chargement des rendez-vous…
-            </p>
-          )}
-
-          {/* Grille: clic créneau vide = création RDV, clic RDV = détail (Story 3.3) */}
+          {/* Grille: clic créneau vide = création RDV, clic RDV = détail (Story 3.3).
+              Story 5.1 AC 1 : on affiche le CalendarSkeleton tant que le premier
+              fetch n'a pas répondu (cache vide + loading). Une fois des données
+              en cache, on garde la grille visible pour ne pas faire flasher
+              l'utilisateur entre deux navigations. */}
           <div className="min-w-0 flex-1 overflow-auto md:overflow-visible">
-            <CalendarGrid
-              pivotDate={pivotDate}
-              viewMode={viewMode}
-              dayContent={dayContent}
-              dayCounts={dayCounts}
-              onSlotClick={handleSlotClick}
-            />
+            {loading && appointments.length === 0 ? (
+              <CalendarSkeleton />
+            ) : viewMode === "day" && activeAppointmentCount === 0 ? (
+              <EmptyState
+                icon={CalendarOff}
+                title="Aucun rendez-vous ce jour"
+                description="Profitez-en pour rattraper du retard administratif ou planifier votre semaine."
+                action={
+                  <Button onClick={handleNewAppointment}>
+                    Nouveau rendez-vous
+                  </Button>
+                }
+              />
+            ) : (
+              <CalendarGrid
+                pivotDate={pivotDate}
+                viewMode={viewMode}
+                dayContent={dayContent}
+                dayCounts={dayCounts}
+                onSlotClick={handleSlotClick}
+              />
+            )}
           </div>
         </div>
 

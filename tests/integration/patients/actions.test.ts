@@ -60,7 +60,7 @@ describe("getPatients", () => {
   it("2.1-INT-004: devrait retourner tous les patients sans filtre", async () => {
     const mockPatients = [
       {
-        id: "patient-1",
+        id: "11111111-1111-4111-8111-111111111111",
         firstName: "Jean",
         lastName: "Martin",
         email: "jean@example.com",
@@ -100,7 +100,7 @@ describe("getPatients", () => {
   it("2.1-INT-005: devrait filtrer par firstName avec recherche", async () => {
     const mockPatients = [
       {
-        id: "patient-1",
+        id: "11111111-1111-4111-8111-111111111111",
         firstName: "Jean",
         lastName: "Martin",
         email: "jean@example.com",
@@ -122,7 +122,7 @@ describe("getPatients", () => {
   it("2.1-INT-006: devrait filtrer par lastName avec recherche", async () => {
     const mockPatients = [
       {
-        id: "patient-1",
+        id: "11111111-1111-4111-8111-111111111111",
         firstName: "Jean",
         lastName: "Martin",
         email: "jean@example.com",
@@ -144,7 +144,7 @@ describe("getPatients", () => {
   it("2.1-INT-007: devrait filtrer par email avec recherche", async () => {
     const mockPatients = [
       {
-        id: "patient-1",
+        id: "11111111-1111-4111-8111-111111111111",
         firstName: "Jean",
         lastName: "Martin",
         email: "jean@example.com",
@@ -212,7 +212,7 @@ describe("getPatients", () => {
   it("2.1-INT-009: devrait retourner le total correct pour la pagination avec filtres", async () => {
     const mockPatients = [
       {
-        id: "patient-1",
+        id: "11111111-1111-4111-8111-111111111111",
         firstName: "Jean",
         lastName: "Martin",
         email: "jean@example.com",
@@ -253,7 +253,7 @@ describe("getPatients", () => {
   it("2.1-INT-013: devrait effectuer une recherche insensible à la casse", async () => {
     const mockPatients = [
       {
-        id: "patient-1",
+        id: "11111111-1111-4111-8111-111111111111",
         firstName: "Jean",
         lastName: "Martin",
         email: "jean@example.com",
@@ -411,7 +411,7 @@ describe("updatePatient (Story 2.2)", () => {
   });
 
   it("2.2-INT-002: devrait retourner erreur si données invalides", async () => {
-    const result = await updatePatient("patient-1", {
+    const result = await updatePatient("11111111-1111-4111-8111-111111111111", {
       lastName: "Martin",
       firstName: "J",
       phone: "0612345678",
@@ -427,7 +427,7 @@ describe("updatePatient (Story 2.2)", () => {
 
   it("2.2-INT-008: devrait mettre à jour le patient en base", async () => {
     const updatedPatient = {
-      id: "patient-1",
+      id: "11111111-1111-4111-8111-111111111111",
       firstName: "Jean",
       lastName: "Martin",
       phone: "0612345678",
@@ -438,7 +438,7 @@ describe("updatePatient (Story 2.2)", () => {
     };
     vi.mocked(prisma.patient.update).mockResolvedValue(updatedPatient as any);
 
-    const result = await updatePatient("patient-1", {
+    const result = await updatePatient("11111111-1111-4111-8111-111111111111", {
       firstName: "Jean",
       lastName: "Martin",
       phone: "0612345678",
@@ -447,10 +447,10 @@ describe("updatePatient (Story 2.2)", () => {
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.patient.id).toBe("patient-1");
+      expect(result.patient.id).toBe("11111111-1111-4111-8111-111111111111");
     }
     expect(prisma.patient.update).toHaveBeenCalledWith({
-      where: { id: "patient-1" },
+      where: { id: "11111111-1111-4111-8111-111111111111" },
       data: {
         firstName: "Jean",
         lastName: "Martin",
@@ -464,7 +464,7 @@ describe("updatePatient (Story 2.2)", () => {
   it("2.2-INT-009: devrait revalider la liste et la fiche après mise à jour", async () => {
     const { revalidatePath } = await import("next/cache");
     vi.mocked(prisma.patient.update).mockResolvedValue({
-      id: "patient-1",
+      id: "11111111-1111-4111-8111-111111111111",
       firstName: "Jean",
       lastName: "Martin",
       phone: "0612345678",
@@ -474,14 +474,14 @@ describe("updatePatient (Story 2.2)", () => {
       appointments: [],
     } as any);
 
-    await updatePatient("patient-1", {
+    await updatePatient("11111111-1111-4111-8111-111111111111", {
       firstName: "Jean",
       lastName: "Martin",
       phone: "0612345678",
     });
 
     expect(revalidatePath).toHaveBeenCalledWith("/dashboard/patients");
-    expect(revalidatePath).toHaveBeenCalledWith("/dashboard/patients/patient-1");
+    expect(revalidatePath).toHaveBeenCalledWith("/dashboard/patients/11111111-1111-4111-8111-111111111111");
   });
 });
 
@@ -493,7 +493,7 @@ describe("getPatientById (Story 2.2)", () => {
 
   it("2.2-INT-005: devrait retourner le patient avec appointments", async () => {
     const patientWithAppointments = {
-      id: "patient-1",
+      id: "11111111-1111-4111-8111-111111111111",
       firstName: "Jean",
       lastName: "Martin",
       phone: "0612345678",
@@ -514,14 +514,14 @@ describe("getPatientById (Story 2.2)", () => {
       patientWithAppointments as any
     );
 
-    const result = await getPatientById("patient-1");
+    const result = await getPatientById("11111111-1111-4111-8111-111111111111");
 
     expect(result).not.toBeNull();
-    expect(result?.id).toBe("patient-1");
+    expect(result?.id).toBe("11111111-1111-4111-8111-111111111111");
     expect(result?.appointments).toHaveLength(1);
     expect(result?.appointments[0].status).toBe("CONFIRMED");
     expect(prisma.patient.findUnique).toHaveBeenCalledWith({
-      where: { id: "patient-1" },
+      where: { id: "11111111-1111-4111-8111-111111111111" },
       include: {
         appointments: { orderBy: { startTime: "desc" } },
       },
@@ -530,14 +530,14 @@ describe("getPatientById (Story 2.2)", () => {
 
   it("2.2-INT-006: devrait lever UnauthorizedError si non authentifié", async () => {
     setupAuthMock(false);
-    await expect(getPatientById("patient-1")).rejects.toThrow(UnauthorizedError);
+    await expect(getPatientById("11111111-1111-4111-8111-111111111111")).rejects.toThrow(UnauthorizedError);
     expect(prisma.patient.findUnique).not.toHaveBeenCalled();
   });
 
   it("2.2-INT-007: devrait retourner null si id inexistant", async () => {
     vi.mocked(prisma.patient.findUnique).mockResolvedValue(null);
 
-    const result = await getPatientById("patient-inexistant");
+    const result = await getPatientById("22222222-2222-4222-8222-222222222222");
 
     expect(result).toBeNull();
   });
@@ -558,17 +558,17 @@ describe("deletePatient (Story 2.2)", () => {
   it("2.2-INT-010: devrait supprimer le patient et retourner success", async () => {
     vi.mocked(prisma.patient.delete).mockResolvedValue({} as any);
 
-    const result = await deletePatient("patient-1");
+    const result = await deletePatient("11111111-1111-4111-8111-111111111111");
 
     expect(result).toEqual({ success: true });
     expect(prisma.patient.delete).toHaveBeenCalledWith({
-      where: { id: "patient-1" },
+      where: { id: "11111111-1111-4111-8111-111111111111" },
     });
   });
 
   it("2.2-INT-011: devrait retourner erreur si non authentifié", async () => {
     setupAuthMock(false);
-    const result = await deletePatient("patient-1");
+    const result = await deletePatient("11111111-1111-4111-8111-111111111111");
     expect(result).toEqual(
       expect.objectContaining({
         success: false,
@@ -582,9 +582,9 @@ describe("deletePatient (Story 2.2)", () => {
     const { revalidatePath } = await import("next/cache");
     vi.mocked(prisma.patient.delete).mockResolvedValue({} as any);
 
-    await deletePatient("patient-1");
+    await deletePatient("11111111-1111-4111-8111-111111111111");
 
     expect(revalidatePath).toHaveBeenCalledWith("/dashboard/patients");
-    expect(revalidatePath).toHaveBeenCalledWith("/dashboard/patients/patient-1");
+    expect(revalidatePath).toHaveBeenCalledWith("/dashboard/patients/11111111-1111-4111-8111-111111111111");
   });
 });

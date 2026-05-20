@@ -16,11 +16,14 @@
  */
 
 import * as React from "react";
-import { Search } from "lucide-react";
+import { Search, Users } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PatientDataTable } from "@/components/patients/patient-data-table";
 import { PatientTableSkeleton } from "@/components/patients/patient-table-skeleton";
+import { CreatePatientModal } from "@/components/patients/create-patient-modal";
 import { getPatients, type PatientTableData } from "@/app/dashboard/patients/actions";
 import { useDebounce } from "@/hooks/use-debounce";
 
@@ -100,9 +103,29 @@ export function PatientsTableWrapper() {
         />
       </div>
 
-      {/* Table des patients ou skeleton de chargement */}
+      {/* Table des patients, skeleton de chargement ou EmptyState (story 5.1, AC 8) */}
       {isLoading ? (
         <PatientTableSkeleton />
+      ) : data.patients.length === 0 ? (
+        debouncedSearch.trim() ? (
+          <EmptyState
+            icon={Search}
+            title={`Aucun résultat pour « ${debouncedSearch.trim()} »`}
+            description="Essayez un autre nom, prénom ou email."
+            action={
+              <Button variant="outline" onClick={() => setSearch("")}>
+                Réinitialiser la recherche
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={Users}
+            title="Aucun patient pour le moment"
+            description="Créez votre premier patient pour commencer à utiliser votre cabinet."
+            action={<CreatePatientModal />}
+          />
+        )
       ) : (
         <PatientDataTable
           patients={data.patients}

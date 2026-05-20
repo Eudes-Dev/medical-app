@@ -25,7 +25,6 @@ import * as React from "react";
 import { useCallback, useEffect, useMemo } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
@@ -33,7 +32,6 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
-  Loader2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -60,6 +58,9 @@ import type { AppointmentWithPatient } from "@/types";
 import { getDurationMinutes } from "@/components/calendar/calendar-utils";
 import { useCalendarStore } from "@/stores/useCalendarStore";
 import { cn } from "@/lib/utils";
+import { LoadingButton } from "@/components/ui/loading-button";
+import { showError, showSuccess } from "@/lib/ui/toast";
+import { TOAST_MESSAGES } from "@/lib/ui/toast-messages";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types & constantes
@@ -267,21 +268,20 @@ export function CreateAppointmentModal({
       const result = await action();
 
       if (result.success) {
-        toast.success(
-          isEdit ? "Rendez-vous modifié" : "Rendez-vous créé",
-          {
-            description: isEdit
-              ? "Les modifications ont été enregistrées."
-              : "Le rendez-vous a été enregistré.",
-          },
+        showSuccess(
+          isEdit
+            ? TOAST_MESSAGES.appointment.updated
+            : TOAST_MESSAGES.appointment.created,
         );
         clearCache();
         onOpenChange(false);
         onSuccess?.();
       } else {
-        toast.error(
-          isEdit ? "Modification impossible" : "Création impossible",
-          { description: result.error },
+        // AC 6/16 : message générique, aucun détail interne dans l'UI.
+        showError(
+          result.error?.includes("occupé")
+            ? TOAST_MESSAGES.errors.slotTaken
+            : TOAST_MESSAGES.errors.server,
         );
       }
     },
@@ -532,29 +532,20 @@ export function CreateAppointmentModal({
           >
             Annuler
           </Button>
-          <Button
+          <LoadingButton
             type="submit"
             onClick={handleSubmit(onSubmit)}
-            disabled={isSubmitting}
+            isLoading={isSubmitting}
+            loadingText={isEdit ? "Enregistrement…" : "Création…"}
             className={cn(
               // Bouton principal vert (cohérent avec la maquette + statut CONFIRMED)
               "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm",
-              // Transition douce + léger lift au hover
               "transition-all duration-200 hover:shadow-md",
             )}
           >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {isEdit ? "Enregistrement…" : "Création…"}
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="h-4 w-4" />
-                {isEdit ? "Enregistrer" : "Créer le rendez-vous"}
-              </>
-            )}
-          </Button>
+            <CheckCircle2 className="h-4 w-4" />
+            {isEdit ? "Enregistrer" : "Créer le rendez-vous"}
+          </LoadingButton>
         </div>
       </DialogContent>
     </Dialog>

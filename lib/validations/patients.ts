@@ -65,6 +65,9 @@ export const paginationSchema = z.object({
  *   isomorphe.
  * - Les règles sont alignées sur le schéma Prisma `Patient` (email optionnel).
  *
+ * Sécurité (story 5.2) : tous les champs texte sont trimés ; les inputs ne
+ * sont consommés que via Prisma (paramétré), aucune interpolation SQL brute.
+ *
  * Règles de validation:
  * - lastName:
  *   - chaîne non vide

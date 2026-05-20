@@ -1,0 +1,124 @@
+schema: 1
+story: "4.2"
+story_title: "Flux de Réservation Invité"
+gate: CONCERNS
+status_reason: >-
+  Implémentation complète et propre des 10 ACs, 26/26 tests verts, sécurité du cookie
+  solide et aucune fuite PII. Le gate reste CONCERNS car deux carry-overs de 4.1
+  (rate limiter absent, TZ serveur dans la requête anti-collision) restent ouverts
+  et une fenêtre de course existe entre le check anti-collision et la création du RDV.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-05-16T18:30:00Z"
+expires: "2026-05-30T18:30:00Z"
+
+quality_score: 70
+
+evidence:
+  tests_reviewed: 26
+  risks_identified: 5
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    ac_gaps: []
+
+top_issues:
+  - id: "CONC-001"
+    severity: medium
+    title: "Race condition entre anti-collision et création du RDV"
+    description: >-
+      `createGuestBooking` exécute un `findMany` puis un `create` non transactionnels.
+      Deux soumissions concurrentes pour le même créneau peuvent toutes deux passer
+      le check d'anti-collision. Impact MVP faible (single-praticien, trafic limité)
+      mais à durcir (transaction Serializable ou index unique partiel sur
+      (startTime, status != CANCELLED)) avant montée en charge.
+    refs:
+      - "app/(public)/[cabinet-slug]/book/actions.ts:165-194"
+    suggested_owner: dev
+
+  - id: "SEC-001"
+    severity: medium
+    title: "Rate limiter absent sur createGuestBooking (carry-over 4.1)"
+    description: >-
+      Server Action publique non authentifiée qui crée des lignes en base. Surface
+      d'abus supérieure à `getAvailableSlots`. TODO en place mais non câblé
+      (story 13.5). À brancher avant prod.
+    refs:
+      - "app/(public)/[cabinet-slug]/book/actions.ts:156-158"
+    suggested_owner: dev
+
+  - id: "REL-001"
+    severity: medium
+    title: "TZ serveur dans la requête anti-collision (carry-over 4.1)"
+    description: >-
+      `startOfDay(slot)` / `endOfDay(slot)` (date-fns) s'appliquent en TZ locale
+      serveur. À aligner avec la correction globale Europe/Paris prévue pour 4.1.
+      Risque opérationnel faible avec les openingHours actuelles (09:00–18:00 Paris)
+      mais incohérence à corriger pour éviter une régression future.
+    refs:
+      - "app/(public)/[cabinet-slug]/book/actions.ts:168-169"
+    suggested_owner: dev
+
+  - id: "DATA-001"
+    severity: low
+    title: "Lookup patient uniquement par email — pas de garde-fou nom/prénom"
+    description: >-
+      La Dev Note AC 4 mentionnait une heuristique « si nom/prénom diffèrent
+      significativement → nouveau patient ». Non implémenté. Acceptable MVP
+      (le praticien fusionne manuellement), à confirmer PO.
+    refs:
+      - "app/(public)/[cabinet-slug]/book/actions.ts:111-129"
+    suggested_owner: po
+
+  - id: "A11Y-001"
+    severity: low
+    title: "Bouton 'Modifier le créneau' non réellement désactivé pendant submit"
+    description: >-
+      `<Button asChild disabled>` enveloppant `<Link>` : la prop disabled n'est
+      pas portée par l'ancre finale. Utiliser `aria-disabled` + onClick preventDefault.
+    refs:
+      - "components/public/GuestForm.tsx:181-188"
+    suggested_owner: dev
+
+waiver:
+  active: false
+
+nfr_validation:
+  security:
+    status: CONCERNS
+    notes: >-
+      Cookie HS256 + httpOnly + secure (prod) + sameSite=lax + JWT_SECRET ≥ 32 chars
+      enforced. Pas de fuite PII (test dédié). Rate limiter manquant (SEC-001).
+  performance:
+    status: PASS
+    notes: >-
+      Anti-collision bornée [startOfDay, endOfDay[, index Prisma `startTime`,
+      select strict, useTransition côté client.
+  reliability:
+    status: CONCERNS
+    notes: >-
+      Race possible sur anti-collision (CONC-001) et incohérence TZ (REL-001).
+      Catch global propre, message générique côté client.
+  maintainability:
+    status: PASS
+    notes: >-
+      Séparation claire validation / cookie / format / action / composants.
+      Conventions respectées, code self-documenting, traçabilité AC ↔ tests propre.
+
+recommendations:
+  immediate:
+    - action: "Brancher le rate limiter (story 13.5) sur createGuestBooking avant prod"
+      refs: ["app/(public)/[cabinet-slug]/book/actions.ts"]
+    - action: "Aligner la correction TZ Europe/Paris (4.1 + 4.2) avant prod"
+      refs:
+        - "lib/cabinet/slots.ts"
+        - "app/(public)/[cabinet-slug]/book/actions.ts:168-169"
+    - action: "Décider du durcissement anti-collision (transaction ou index unique partiel)"
+      refs: ["app/(public)/[cabinet-slug]/book/actions.ts:165-194"]
+  future:
+    - action: "Corriger `Button asChild disabled` → aria-disabled + handler preventDefault"
+      refs: ["components/public/GuestForm.tsx:181-188"]
+    - action: "Ajouter 1 assertion `cookieStore` dans le test 'crée un nouveau patient'"
+      refs: ["tests/integration/public-booking/guest-booking.test.ts"]
+    - action: "Couvrir la page success via le E2E Playwright mutualisé livré en 4.3"
+      refs: ["tests/e2e/"]
+    - action: "Confirmer PO : faut-il dédoublonner Patient sur (email + nom) ou statu quo ?"
+      refs: ["app/(public)/[cabinet-slug]/book/actions.ts:111-129"]

@@ -32,10 +32,13 @@ export const APPOINTMENT_TYPES = [
  * - duration: 15, 30, 45 ou 60 minutes
  * - type: l'un des types prédéfinis
  * - notes: optionnel, max 500 caractères
+ *
+ * Sécurité (story 5.2) : champs texte trimés ; les inputs sont consommés
+ * exclusivement via Prisma (paramétré), aucune interpolation SQL brute.
  */
 export const appointmentSchema = z.object({
   /** ID du patient sélectionné */
-  patientId: z.string().min(1, "Veuillez sélectionner un patient"),
+  patientId: z.string().trim().min(1, "Veuillez sélectionner un patient"),
   /** Date et heure de début du rendez-vous */
   startTime: z
     .date({ error: "La date et l'heure de début sont requises" })
@@ -55,6 +58,7 @@ export const appointmentSchema = z.object({
   /** Notes optionnelles, limitées à 500 caractères */
   notes: z
     .string()
+    .trim()
     .max(500, "Les notes ne peuvent pas dépasser 500 caractères")
     .optional(),
 });

@@ -32,3 +32,20 @@ export class UnauthorizedError extends Error {
     }
   }
 }
+
+/**
+ * Erreur levée lorsqu'une Server Action reçoit une entrée invalide
+ * (UUID malformé, payload incohérent, etc.) — distinct de
+ * `UnauthorizedError` pour permettre le mapping UI dédié `BAD_REQUEST`.
+ *
+ * Le message technique reste serveur (loggé), seul le code traverse.
+ */
+export class BadRequestError extends Error {
+  constructor(message: string = "Bad Request") {
+    super(message);
+    this.name = "BadRequestError";
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, BadRequestError);
+    }
+  }
+}

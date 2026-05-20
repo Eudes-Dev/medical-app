@@ -66,7 +66,7 @@ const patientFixture = {
 
 function appointmentFixture(overrides: Partial<any> = {}) {
   return {
-    id: "apt-1",
+    id: "33333333-3333-4333-8333-333333333333",
     patientId: patientFixture.id,
     startTime: new Date("2026-06-01T10:00:00Z"),
     endTime: new Date("2026-06-01T10:30:00Z"),
@@ -174,11 +174,11 @@ describe("Story 3.3 — Gestion des créneaux", () => {
       await checkConflict(
         new Date("2026-06-01T10:00:00Z"),
         new Date("2026-06-01T10:30:00Z"),
-        "apt-99"
+        "55555555-5555-4555-8555-555555555555"
       );
 
       const call = vi.mocked(prisma.appointment.findFirst).mock.calls[0][0]!;
-      expect(call.where).toMatchObject({ id: { not: "apt-99" } });
+      expect(call.where).toMatchObject({ id: { not: "55555555-5555-4555-8555-555555555555" } });
     });
 
     it("checkConflict lève UnauthorizedError si non authentifié", async () => {
@@ -323,20 +323,20 @@ describe("Story 3.3 — Gestion des créneaux", () => {
       );
 
       const newStart = new Date("2026-06-01T11:00:00Z");
-      const result = await updateAppointment("apt-1", {
+      const result = await updateAppointment("33333333-3333-4333-8333-333333333333", {
         startTime: newStart,
         duration: 30,
       });
 
       expect(result.success).toBe(true);
-      // checkConflict appelé avec excludeId = "apt-1"
+      // checkConflict appelé avec excludeId = "33333333-3333-4333-8333-333333333333"
       const conflictCall = vi.mocked(prisma.appointment.findFirst).mock
         .calls[0][0]!;
-      expect(conflictCall.where).toMatchObject({ id: { not: "apt-1" } });
+      expect(conflictCall.where).toMatchObject({ id: { not: "33333333-3333-4333-8333-333333333333" } });
       // Update appelé avec startTime/endTime recalculés
       expect(prisma.appointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: "apt-1" },
+          where: { id: "33333333-3333-4333-8333-333333333333" },
           data: expect.objectContaining({
             startTime: newStart,
             endTime: new Date(newStart.getTime() + 30 * 60 * 1000),
@@ -352,7 +352,7 @@ describe("Story 3.3 — Gestion des créneaux", () => {
       );
       vi.mocked(prisma.appointment.findFirst).mockResolvedValue(
         appointmentFixture({
-          id: "apt-2",
+          id: "44444444-4444-4444-8444-444444444444",
           patient: {
             id: "p2",
             firstName: "Sophie",
@@ -361,7 +361,7 @@ describe("Story 3.3 — Gestion des créneaux", () => {
         }) as any
       );
 
-      const result = await updateAppointment("apt-1", {
+      const result = await updateAppointment("33333333-3333-4333-8333-333333333333", {
         startTime: new Date("2026-06-01T11:00:00Z"),
         duration: 30,
       });
@@ -377,7 +377,7 @@ describe("Story 3.3 — Gestion des créneaux", () => {
     it("updateAppointment retourne erreur si RDV introuvable", async () => {
       vi.mocked(prisma.appointment.findUnique).mockResolvedValue(null);
 
-      const result = await updateAppointment("missing", { type: "Suivi" });
+      const result = await updateAppointment("66666666-6666-4666-8666-666666666666", { type: "Suivi" });
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -397,11 +397,11 @@ describe("Story 3.3 — Gestion des créneaux", () => {
         appointmentFixture() as any
       );
 
-      const result = await deleteAppointment("apt-1");
+      const result = await deleteAppointment("33333333-3333-4333-8333-333333333333");
 
       expect(result.success).toBe(true);
       expect(prisma.appointment.delete).toHaveBeenCalledWith({
-        where: { id: "apt-1" },
+        where: { id: "33333333-3333-4333-8333-333333333333" },
       });
       expect(revalidatePath).toHaveBeenCalledWith("/dashboard/calendar");
     });
@@ -409,7 +409,7 @@ describe("Story 3.3 — Gestion des créneaux", () => {
     it("deleteAppointment lève UnauthorizedError si non authentifié", async () => {
       setupAuthMock(false);
 
-      await expect(deleteAppointment("apt-1")).rejects.toThrow(
+      await expect(deleteAppointment("33333333-3333-4333-8333-333333333333")).rejects.toThrow(
         UnauthorizedError
       );
       expect(prisma.appointment.delete).not.toHaveBeenCalled();
@@ -426,11 +426,11 @@ describe("Story 3.3 — Gestion des créneaux", () => {
         appointmentFixture({ status: "CONFIRMED" }) as any
       );
 
-      const result = await updateAppointmentStatus("apt-1", "CONFIRMED");
+      const result = await updateAppointmentStatus("33333333-3333-4333-8333-333333333333", "CONFIRMED");
 
       expect(result.success).toBe(true);
       expect(prisma.appointment.update).toHaveBeenCalledWith({
-        where: { id: "apt-1" },
+        where: { id: "33333333-3333-4333-8333-333333333333" },
         data: { status: "CONFIRMED" },
       });
       expect(revalidatePath).toHaveBeenCalledWith("/dashboard/calendar");
@@ -441,18 +441,18 @@ describe("Story 3.3 — Gestion des créneaux", () => {
         appointmentFixture({ status: "CANCELLED" }) as any
       );
 
-      const result = await updateAppointmentStatus("apt-1", "CANCELLED");
+      const result = await updateAppointmentStatus("33333333-3333-4333-8333-333333333333", "CANCELLED");
 
       expect(result.success).toBe(true);
       expect(prisma.appointment.update).toHaveBeenCalledWith({
-        where: { id: "apt-1" },
+        where: { id: "33333333-3333-4333-8333-333333333333" },
         data: { status: "CANCELLED" },
       });
     });
 
     it("updateAppointmentStatus refuse un statut PENDING (non autorisé)", async () => {
       const result = await updateAppointmentStatus(
-        "apt-1",
+        "33333333-3333-4333-8333-333333333333",
         "PENDING" as never
       );
 
