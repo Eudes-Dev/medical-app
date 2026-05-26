@@ -15,7 +15,6 @@
 
 import * as React from "react";
 import { Plus } from "lucide-react";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +30,8 @@ import {
 import { PatientForm } from "@/components/patients/patient-form";
 import type { PatientFormValues } from "@/lib/validations/patients";
 import { createPatient } from "@/app/dashboard/patients/actions";
+import { showError, showSuccess } from "@/lib/ui/toast";
+import { TOAST_MESSAGES } from "@/lib/ui/toast-messages";
 
 /**
  * Type de résultat attendu depuis la Server Action createPatient.
@@ -111,26 +112,24 @@ export function CreatePatientModal({
         const result = (await createPatient(values)) as CreatePatientResult;
 
         if (!result || !("success" in result)) {
-          toast.error(
-            "La création du patient a échoué. Veuillez réessayer plus tard."
-          );
+          showError(TOAST_MESSAGES.errors.server);
           return;
         }
 
         if (result.success) {
-          toast.success("Patient créé avec succès", {
+          // AC 15 : on conserve nom/prénom dans la description (contexte de
+          // confirmation explicite déjà autorisé).
+          showSuccess(TOAST_MESSAGES.patient.created, {
             description: `${result.patient.firstName} ${result.patient.lastName} a été ajouté à votre base de patients.`,
           });
           onPatientCreated?.(result.patient);
           setOpen(false);
         } else {
-          toast.error(result.error || "La création du patient a échoué.");
+          showError(TOAST_MESSAGES.errors.validation);
         }
       } catch (error) {
         console.error("[CreatePatientModal] createPatient error:", error);
-        toast.error(
-          "Une erreur inattendue est survenue lors de la création du patient."
-        );
+        showError(TOAST_MESSAGES.errors.server);
       } finally {
         setIsSubmitting(false);
       }

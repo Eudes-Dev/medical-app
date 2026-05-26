@@ -15,9 +15,11 @@ import { useCallback, useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/loading-button";
+import { showError, showSuccess } from "@/lib/ui/toast";
+import { TOAST_MESSAGES } from "@/lib/ui/toast-messages";
 import { CreateAppointmentModal } from "@/components/calendar/CreateAppointmentModal";
 import {
   Dialog,
@@ -81,11 +83,15 @@ function DetailsContent({
       try {
         const result = await updateAppointmentStatus(appointment.id, status);
         if (result.success) {
-          toast.success(`Statut mis à jour: ${AppointmentStatusLabels[status]}`);
+          showSuccess(
+            status === "CANCELLED"
+              ? TOAST_MESSAGES.appointment.cancelled
+              : TOAST_MESSAGES.appointment.statusUpdated,
+          );
           clearCache();
           onUpdated();
         } else {
-          toast.error(result.error ?? "Erreur lors du changement de statut.");
+          showError(TOAST_MESSAGES.errors.server);
         }
       } finally {
         setLoadingAction(null);
@@ -100,11 +106,11 @@ function DetailsContent({
     try {
       const result = await deleteAppointment(appointment.id);
       if (result.success) {
-        toast.success("Rendez-vous supprimé.");
+        showSuccess(TOAST_MESSAGES.appointment.deleted);
         clearCache();
         onClose();
       } else {
-        toast.error(result.error ?? "Erreur lors de la suppression.");
+        showError(TOAST_MESSAGES.errors.server);
       }
     } finally {
       setLoadingAction(null);
@@ -178,44 +184,48 @@ function DetailsContent({
           </Button>
         )}
         {appointment.status === "PENDING" && (
-          <Button
+          <LoadingButton
             size="sm"
             className="bg-[#2563eb] hover:bg-[#2563eb]/90"
-            disabled={!!loadingAction}
+            isLoading={loadingAction === "Confirmer"}
+            disabled={!!loadingAction && loadingAction !== "Confirmer"}
             onClick={() => handleStatusChange("CONFIRMED", "Confirmer")}
           >
             Confirmer
-          </Button>
+          </LoadingButton>
         )}
         {appointment.status !== "CANCELLED" && (
           <>
-            <Button
+            <LoadingButton
               size="sm"
               variant="outline"
-              disabled={!!loadingAction}
+              isLoading={loadingAction === "Annuler"}
+              disabled={!!loadingAction && loadingAction !== "Annuler"}
               onClick={handleCancelAppointment}
             >
               Annuler le RDV
-            </Button>
-            <Button
+            </LoadingButton>
+            <LoadingButton
               size="sm"
               variant="outline"
-              disabled={!!loadingAction}
+              isLoading={loadingAction === "Terminer"}
+              disabled={!!loadingAction && loadingAction !== "Terminer"}
               onClick={() => handleStatusChange("COMPLETED", "Terminer")}
             >
               Terminer
-            </Button>
+            </LoadingButton>
           </>
         )}
-        <Button
+        <LoadingButton
           size="sm"
           variant="destructive"
           className="bg-rose-500 hover:bg-rose-600"
-          disabled={!!loadingAction}
+          isLoading={loadingAction === "Supprimer"}
+          disabled={!!loadingAction && loadingAction !== "Supprimer"}
           onClick={handleDelete}
         >
           Supprimer
-        </Button>
+        </LoadingButton>
       </div>
     </div>
   );

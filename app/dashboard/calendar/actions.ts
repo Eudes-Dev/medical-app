@@ -18,32 +18,17 @@
 import { revalidatePath } from "next/cache";
 import { addMinutes } from "date-fns";
 
-import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { UnauthorizedError } from "@/lib/errors";
+import { requireUser } from "@/lib/server/auth";
+import { UnauthorizedError, BadRequestError } from "@/lib/errors";
+import { assertValidUuid } from "@/lib/validations/uuid";
 import { appointmentSchema, type AppointmentFormValues } from "@/lib/validations/appointment";
 import type { AppointmentWithPatient } from "@/types";
 import type { AppointmentStatus } from "@/types";
+import { sendCancellationEmail } from "@/lib/email/send-cancellation";
 
 /** Chemin de la page calendrier à revalider après création/modification/suppression */
 const CALENDAR_PATH = "/dashboard/calendar";
-
-/**
- * Vérifie que l'utilisateur est authentifié.
- * @throws {UnauthorizedError} Si non connecté
- */
-async function ensureAuth() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    throw new UnauthorizedError(
-      "User must be authenticated to access calendar appointments"
-    );
-  }
-  return { supabase };
-}
 
 /**
  * Mappe un rendez-vous Prisma (avec patient) vers le type AppointmentWithPatient.
@@ -101,7 +86,7 @@ export async function getAppointmentsByDateRange(
   endDate: Date,
   showCancelled: boolean
 ): Promise<AppointmentWithPatient[]> {
-  await ensureAuth();
+  await requireUser();
 
   // Requête: RDV dont la plage [startTime, endTime] intersecte [startDate, endDate]
   // Condition: startTime < endDate ET endTime > startDate
@@ -147,7 +132,7 @@ export async function checkConflict(
   endTime: Date,
   excludeId?: string
 ): Promise<{ hasConflict: boolean; conflictingAppointment?: AppointmentWithPatient }> {
-  await ensureAuth();
+  await requireUser();
 
   const conflict = await prisma.appointment.findFirst({
     where: {
@@ -190,7 +175,7 @@ export async function createAppointment(
   data: AppointmentFormValues
 ): Promise<CreateAppointmentResult> {
   try {
-    await ensureAuth();
+    await requireUser();
 
     const parsed = appointmentSchema.safeParse(data);
     if (!parsed.success) {
@@ -260,7 +245,8 @@ export async function updateAppointment(
   data: Partial<AppointmentFormValues>
 ): Promise<UpdateAppointmentResult> {
   try {
-    await ensureAuth();
+    await requireUser();
+    assertValidUuid(id);
 
     const existing = await prisma.appointment.findUnique({
       where: { id },
@@ -318,6 +304,9 @@ export async function updateAppointment(
     };
   } catch (e) {
     if (e instanceof UnauthorizedError) throw e;
+    if (e instanceof BadRequestError) {
+      return { success: false, error: "Identifiant de rendez-vous invalide." };
+    }
     console.error("[updateAppointment] Error:", e);
     return {
       success: false,
@@ -331,13 +320,17 @@ export async function updateAppointment(
  */
 export async function deleteAppointment(id: string): Promise<{ success: boolean; error?: string }> {
   try {
-    await ensureAuth();
+    await requireUser();
+    assertValidUuid(id);
 
     await prisma.appointment.delete({ where: { id } });
     revalidatePath(CALENDAR_PATH);
     return { success: true };
   } catch (e) {
     if (e instanceof UnauthorizedError) throw e;
+    if (e instanceof BadRequestError) {
+      return { success: false, error: "Identifiant de rendez-vous invalide." };
+    }
     console.error("[deleteAppointment] Error:", e);
     return {
       success: false,
@@ -354,21 +347,42 @@ export async function updateAppointmentStatus(
   status: AppointmentStatus
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await ensureAuth();
+    await requireUser();
+    assertValidUuid(id);
 
     const allowed: AppointmentStatus[] = ["CONFIRMED", "CANCELLED", "COMPLETED"];
     if (!allowed.includes(status)) {
       return { success: false, error: "Statut invalide." };
     }
 
-    await prisma.appointment.update({
+    const updated = await prisma.appointment.update({
       where: { id },
       data: { status },
+      include: {
+        patient: {
+          select: { firstName: true, lastName: true, email: true },
+        },
+      },
     });
     revalidatePath(CALENDAR_PATH);
+
+    // Fire-and-forget : email d'annulation au patient si email disponible.
+    if (status === "CANCELLED" && updated.patient.email) {
+      void sendCancellationEmail({
+        appointmentId: id,
+        patientEmail: updated.patient.email,
+        patientFirstName: updated.patient.firstName,
+        appointmentDate: updated.startTime,
+        appointmentType: updated.type,
+      }).catch((err) => console.error("[email:cancellation] envoi échoué:", err));
+    }
+
     return { success: true };
   } catch (e) {
     if (e instanceof UnauthorizedError) throw e;
+    if (e instanceof BadRequestError) {
+      return { success: false, error: "Identifiant de rendez-vous invalide." };
+    }
     console.error("[updateAppointmentStatus] Error:", e);
     return {
       success: false,

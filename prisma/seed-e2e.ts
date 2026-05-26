@@ -77,6 +77,7 @@ async function main() {
           lastName: "Martin",
           phone: "0611111111",
           email: "alice.martin@test.local",
+          optOutToken: "e2e-opt-out-token-alice",
         },
       }),
       prisma.patient.create({
@@ -85,6 +86,7 @@ async function main() {
           lastName: "Durand",
           phone: "0622222222",
           email: "bob.durand@test.local",
+          optOutToken: "e2e-opt-out-token-bob",
         },
       }),
       prisma.patient.create({
@@ -92,6 +94,7 @@ async function main() {
           firstName: "Chloé",
           lastName: "Petit",
           phone: "0633333333",
+          optOutToken: "e2e-opt-out-token-chloe",
         },
       }),
     ]);
@@ -108,6 +111,8 @@ async function main() {
           endTime: setMinutes(setHours(today, 9), 30),
           status: "PENDING",
           type: "Consultation de suivi",
+          // Token d'annulation pour les RDV créés via le tunnel public (story 6.1)
+          cancellationToken: "e2e-cancel-token-alice-today",
         },
         {
           patientId: patients[1].id,

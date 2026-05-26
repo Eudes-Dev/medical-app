@@ -30,9 +30,14 @@ import { z } from "zod";
  * }
  * ```
  */
+// Story 5.2 : `email` trimé + lowercased ; le mot de passe n'est pas trimé
+// (un espace en début/fin peut être volontaire et la comparaison est exacte).
+// Inputs consommés uniquement via Supabase Auth (paramétré, pas de SQL brut).
 export const loginSchema = z.object({
   email: z
     .string()
+    .trim()
+    .toLowerCase()
     .min(1, "L'email est requis")
     .email("Email invalide"),
   password: z

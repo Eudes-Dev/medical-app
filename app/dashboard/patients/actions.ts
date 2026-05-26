@@ -10,14 +10,22 @@
  * - Récupérer un patient par son identifiant (avec historique de RDV)
  * - Supprimer un patient
  *
+ * Sécurité (Story 5.2) :
+ *  - Toutes les actions passent par `requireUser()` (lib/server/auth).
+ *  - Les actions paramétrées par `id` valident l'UUID via `assertValidUuid()`
+ *    avant tout appel Prisma.
+ *  - Les schémas Zod (lib/validations/patients) ne consomment les inputs que
+ *    via Prisma paramétré — aucune interpolation SQL brute.
+ *
  * @module app/dashboard/patients/actions
  */
 
 import { revalidatePath } from "next/cache";
 
-import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { UnauthorizedError } from "@/lib/errors";
+import { requireUser } from "@/lib/server/auth";
+import { UnauthorizedError, BadRequestError } from "@/lib/errors";
+import { assertValidUuid } from "@/lib/validations/uuid";
 import {
   searchSchema,
   paginationSchema,
@@ -40,9 +48,7 @@ export type PatientTableData = {
  * Type de retour de la Server Action getPatients.
  */
 export type GetPatientsResult = {
-  /** Liste des patients pour la page courante */
   patients: PatientTableData[];
-  /** Nombre total de patients (pour la pagination) */
   total: number;
 };
 
@@ -74,30 +80,7 @@ export type PatientDetail = {
 /**
  * Récupère la liste des patients avec pagination et recherche.
  *
- * Cette Server Action:
- * 1. Vérifie que l'utilisateur est authentifié
- * 2. Valide et sanitize les paramètres de recherche et pagination
- * 3. Construit une clause WHERE conditionnelle pour la recherche
- *    (recherche dans firstName, lastName, email si search fourni)
- * 4. Récupère les patients avec pagination (skip/take)
- * 5. Compte le total de patients correspondant aux filtres
- * 6. Retourne les patients et le total pour la pagination
- *
- * @param page - Numéro de page (commence à 1)
- * @param limit - Nombre de résultats par page (défaut: 10)
- * @param search - Terme de recherche optionnel (nom, prénom, email)
- * @returns Objet contenant la liste des patients et le total
- * @throws {UnauthorizedError} Si l'utilisateur n'est pas authentifié
- * @throws {Error} En cas d'erreur de validation ou Prisma
- *
- * @example
- * ```typescript
- * // Récupérer la première page (10 patients)
- * const { patients, total } = await getPatients(1, 10);
- *
- * // Rechercher "Martin" dans les noms/prénoms/emails
- * const { patients, total } = await getPatients(1, 10, "Martin");
- * ```
+ * @throws {UnauthorizedError} Si l'utilisateur n'est pas authentifié.
  */
 export async function getPatients(
   page: number = 1,
@@ -105,21 +88,8 @@ export async function getPatients(
   search?: string
 ): Promise<GetPatientsResult> {
   try {
-    // Vérifier l'authentification via Supabase Auth
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    await requireUser();
 
-    // Si l'utilisateur n'est pas authentifié, lever une erreur explicite
-    // (le middleware devrait normalement empêcher l'accès, mais double vérification)
-    if (!user) {
-      throw new UnauthorizedError(
-        "User must be authenticated to access patient data"
-      );
-    }
-
-    // Valider et sanitizer les paramètres de pagination
     const paginationResult = paginationSchema.safeParse({ page, limit });
     if (!paginationResult.success) {
       throw new Error(
@@ -128,7 +98,6 @@ export async function getPatients(
     }
     const { page: validatedPage, limit: validatedLimit } = paginationResult.data;
 
-    // Valider et sanitizer le paramètre de recherche
     const searchResult = searchSchema.safeParse(search);
     if (!searchResult.success) {
       throw new Error(
@@ -137,9 +106,6 @@ export async function getPatients(
     }
     const validatedSearch = searchResult.data;
 
-    // Construire la clause WHERE pour la recherche
-    // Si search est fourni et non vide, rechercher dans firstName, lastName, email
-    // Sinon, pas de filtre (récupérer tous les patients)
     const where = validatedSearch
       ? {
           OR: [
@@ -150,18 +116,13 @@ export async function getPatients(
         }
       : {};
 
-    // Exécuter les requêtes en parallèle pour optimiser les performances
-    // 1. Récupérer les patients avec pagination
-    // 2. Compter le total de patients correspondant aux filtres
     const [patients, total] = await Promise.all([
-      // Requête pour récupérer les patients de la page courante
       prisma.patient.findMany({
         where,
-        skip: (validatedPage - 1) * validatedLimit, // Ignorer les patients des pages précédentes
-        take: validatedLimit, // Limiter au nombre de résultats par page
-        orderBy: { lastName: "asc" }, // Trier par nom de famille (ordre alphabétique)
+        skip: (validatedPage - 1) * validatedLimit,
+        take: validatedLimit,
+        orderBy: { lastName: "asc" },
         select: {
-          // Sélectionner uniquement les champs nécessaires pour la table
           id: true,
           firstName: true,
           lastName: true,
@@ -169,25 +130,14 @@ export async function getPatients(
           phone: true,
         },
       }),
-      // Requête pour compter le total de patients correspondant aux filtres
       prisma.patient.count({ where }),
     ]);
 
-    // Retourner les résultats formatés
-    return {
-      patients,
-      total,
-    };
+    return { patients, total };
   } catch (error) {
-    // Si c'est déjà une UnauthorizedError, la propager telle quelle
-    if (error instanceof UnauthorizedError) {
-      throw error;
-    }
+    if (error instanceof UnauthorizedError) throw error;
 
-    // Logger les erreurs Prisma et de validation pour faciliter le debugging
     console.error("[getPatients] Error:", error);
-
-    // Propager l'erreur avec un message plus explicite
     throw new Error(
       `Failed to fetch patients: ${error instanceof Error ? error.message : "Unknown error"}`
     );
@@ -196,15 +146,6 @@ export async function getPatients(
 
 /**
  * Crée un nouveau patient en base de données.
- *
- * Cette Server Action:
- * 1. Vérifie que l'utilisateur est authentifié
- * 2. Valide les données avec `patientSchema` (Zod)
- * 3. Crée le patient via Prisma
- * 4. Revalide la liste des patients (`/dashboard/patients`)
- *
- * @param data - Données du formulaire de patient
- * @returns Résultat de la création (succès ou message d'erreur)
  */
 export async function createPatient(
   data: PatientFormValues
@@ -213,23 +154,10 @@ export async function createPatient(
   | { success: false; error: string }
 > {
   try {
-    // Vérifier l'authentification via Supabase Auth
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    await requireUser();
 
-    if (!user) {
-      return {
-        success: false,
-        error: "Vous devez être connecté pour créer un patient.",
-      };
-    }
-
-    // Validation des données via Zod
     const parsed = patientSchema.safeParse(data);
     if (!parsed.success) {
-      // On retourne un message générique côté client; le détail peut être loggé serveur
       console.error("[createPatient] Validation error:", parsed.error.flatten());
       return {
         success: false,
@@ -238,7 +166,6 @@ export async function createPatient(
       };
     }
 
-    // Création du patient en base
     const patient = await prisma.patient.create({
       data: {
         firstName: parsed.data.firstName,
@@ -248,7 +175,6 @@ export async function createPatient(
       },
     });
 
-    // Revalider la page liste des patients
     revalidatePath("/dashboard/patients");
 
     return {
@@ -262,6 +188,12 @@ export async function createPatient(
       },
     };
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return {
+        success: false,
+        error: "Vous devez être connecté pour créer un patient.",
+      };
+    }
     console.error("[createPatient] Error:", error);
     return {
       success: false,
@@ -273,10 +205,6 @@ export async function createPatient(
 
 /**
  * Met à jour un patient existant.
- *
- * @param id - Identifiant du patient à mettre à jour
- * @param data - Données mises à jour
- * @returns Résultat de la mise à jour (succès ou message d'erreur)
  */
 export async function updatePatient(
   id: string,
@@ -286,17 +214,8 @@ export async function updatePatient(
   | { success: false; error: string }
 > {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return {
-        success: false,
-        error: "Vous devez être connecté pour modifier un patient.",
-      };
-    }
+    await requireUser();
+    assertValidUuid(id);
 
     const parsed = patientSchema.safeParse(data);
     if (!parsed.success) {
@@ -317,9 +236,7 @@ export async function updatePatient(
         email: parsed.data.email ?? null,
       },
       include: {
-        appointments: {
-          orderBy: { startTime: "desc" },
-        },
+        appointments: { orderBy: { startTime: "desc" } },
       },
     });
 
@@ -346,6 +263,15 @@ export async function updatePatient(
       },
     };
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return {
+        success: false,
+        error: "Vous devez être connecté pour modifier un patient.",
+      };
+    }
+    if (error instanceof BadRequestError) {
+      return { success: false, error: "Identifiant de patient invalide." };
+    }
     console.error("[updatePatient] Error:", error);
     return {
       success: false,
@@ -358,44 +284,28 @@ export async function updatePatient(
 /**
  * Récupère un patient par son identifiant avec son historique de rendez-vous.
  *
- * @param id - Identifiant du patient
- * @returns Les détails du patient ou null s'il n'existe pas
- * @throws {UnauthorizedError} Si l'utilisateur n'est pas authentifié
+ * @throws {UnauthorizedError} Si l'utilisateur n'est pas authentifié.
  */
 export async function getPatientById(
   id: string | undefined | null
 ): Promise<PatientDetail | null> {
   try {
-    // Sécurité supplémentaire: ne jamais appeler Prisma avec un id vide/undefined
     if (!id) {
       console.error("[getPatientById] Called without a valid id:", id);
       return null;
     }
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      throw new UnauthorizedError(
-        "User must be authenticated to access patient detail"
-      );
-    }
+    await requireUser();
+    assertValidUuid(id);
 
     const patient = await prisma.patient.findUnique({
-      // À ce stade, `id` est garanti non nul/non vide
       where: { id },
       include: {
-        appointments: {
-          orderBy: { startTime: "desc" },
-        },
+        appointments: { orderBy: { startTime: "desc" } },
       },
     });
 
-    if (!patient) {
-      return null;
-    }
+    if (!patient) return null;
 
     return {
       id: patient.id,
@@ -414,8 +324,10 @@ export async function getPatientById(
       })),
     };
   } catch (error) {
-    if (error instanceof UnauthorizedError) {
-      throw error;
+    if (error instanceof UnauthorizedError) throw error;
+    if (error instanceof BadRequestError) {
+      console.error("[getPatientById] Invalid UUID:", error.message);
+      return null;
     }
 
     console.error("[getPatientById] Error:", error);
@@ -431,35 +343,30 @@ export async function getPatientById(
  * Supprime un patient de la base de données.
  *
  * ⚠️ Suppression "hard delete" (pas de soft delete dans cette story).
- *
- * @param id - Identifiant du patient à supprimer
- * @returns Résultat de la suppression (succès ou message d'erreur)
  */
 export async function deletePatient(
   id: string
 ): Promise<{ success: true } | { success: false; error: string }> {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    await requireUser();
+    assertValidUuid(id);
 
-    if (!user) {
-      return {
-        success: false,
-        error: "Vous devez être connecté pour supprimer un patient.",
-      };
-    }
-
-    await prisma.patient.delete({
-      where: { id },
-    });
+    await prisma.patient.delete({ where: { id } });
 
     revalidatePath("/dashboard/patients");
     revalidatePath(`/dashboard/patients/${id}`);
 
     return { success: true };
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return {
+        success: false,
+        error: "Vous devez être connecté pour supprimer un patient.",
+      };
+    }
+    if (error instanceof BadRequestError) {
+      return { success: false, error: "Identifiant de patient invalide." };
+    }
     console.error("[deletePatient] Error:", error);
     return {
       success: false,
@@ -468,4 +375,3 @@ export async function deletePatient(
     };
   }
 }
-

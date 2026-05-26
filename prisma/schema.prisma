@@ -55,6 +55,27 @@ enum AppointmentStatus {
   COMPLETED
 }
 
+/// Canal d'envoi d'un message transactionnel (story 6.3).
+enum MessageChannel {
+  EMAIL
+  SMS
+}
+
+/// Type de message transactionnel envoyé (story 6.1, renommé en 6.3).
+enum MessageType {
+  CONFIRMATION
+  CANCELLATION
+  PRACTITIONER_NOTIFY
+  REMINDER_D1
+  REMINDER_H2
+}
+
+/// Statut de l'envoi d'un message transactionnel (story 6.1, renommé en 6.3).
+enum MessageStatus {
+  SENT
+  FAILED
+}
+
 // ==============================================
 // MODÈLES
 // ==============================================
@@ -123,11 +144,15 @@ model Patient {
   /// Date de naissance (optionnel)
   dateOfBirth DateTime? @map("date_of_birth")
   /// Notes médicales ou administratives (optionnel)
-  notes       String?
+  notes           String?
+  /// Opt-out des rappels automatiques (story 6.2)
+  reminderOptOut  Boolean   @default(false) @map("reminder_opt_out")
+  /// Token UUID opaque pour le lien de désinscription (story 6.2)
+  optOutToken     String    @default(dbgenerated("gen_random_uuid()")) @unique @map("opt_out_token")
   /// Date de création du dossier patient
-  createdAt   DateTime  @default(now()) @map("created_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
   /// Date de dernière modification
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   /// Liste des rendez-vous du patient (relation 1:N)
   appointments Appointment[]
@@ -173,19 +198,61 @@ model Appointment {
   /// Type de consultation (ex: "Première consultation", "Suivi", "Urgence")
   type      String
   /// Notes sur le rendez-vous (optionnel)
-  notes     String?
+  notes             String?
+  /// Token UUID d'annulation (généré pour les RDV via tunnel public, null pour les RDV dashboard)
+  cancellationToken String?   @unique @map("cancellation_token")
+  /// Horodatage du rappel J-1 envoyé (null = pas encore envoyé) (story 6.2)
+  reminderD1SentAt  DateTime? @map("reminder_d1_sent_at")
+  /// Horodatage du rappel H-2 envoyé (null = pas encore envoyé) (story 6.2)
+  reminderH2SentAt  DateTime? @map("reminder_h2_sent_at")
   /// Date de création du rendez-vous
-  createdAt DateTime          @default(now()) @map("created_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
   /// Date de dernière modification
-  updatedAt DateTime          @updatedAt @map("updated_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   /// Relation vers le Patient propriétaire du rendez-vous
   /// onDelete Cascade: Suppression du patient → suppression de ses RDV
-  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  /// Logs des messages (email + SMS) envoyés pour ce rendez-vous (story 6.1, étendu en 6.3)
+  messageLogs MessageLog[]
 
   /// Index sur patientId pour optimiser les requêtes par patient
   @@index([patientId])
   /// Index sur startTime pour optimiser les requêtes de calendrier
   @@index([startTime])
   @@map("appointments")
+}
+
+/// Journal des messages transactionnels envoyés (story 6.1, renommé/étendu en 6.3).
+///
+/// Permet de tracer les succès et échecs d'envoi (email + SMS) sans bloquer le flux principal.
+/// La colonne `cost` est alimentée par le webhook Twilio Status pour le suivi budgétaire SMS.
+model MessageLog {
+  /// Identifiant unique UUID
+  id                String          @id @default(uuid())
+  /// ID du rendez-vous concerné (optionnel — null si non applicable)
+  appointmentId     String?         @map("appointment_id")
+  /// Relation vers le rendez-vous (nullable — onDelete SetNull pour conserver le log si le RDV est supprimé)
+  appointment       Appointment?    @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  /// Canal d'envoi (EMAIL par défaut pour préserver la rétro-compatibilité avec 6.1)
+  channel           MessageChannel  @default(EMAIL)
+  /// Destinataire — email ou téléphone E.164, pour traçabilité
+  to                String
+  /// Type de message envoyé
+  type              MessageType
+  /// Statut de l'envoi
+  status            MessageStatus
+  /// ID du message retourné par le provider (Resend pour email, Twilio pour SMS).
+  /// Unique : le webhook Twilio Status cible un seul log par SID (QA SCHEMA-001).
+  providerMessageId String?         @unique @map("provider_message_id")
+  /// Coût retourné par le provider (ex: Twilio renvoie 0.05 EUR). Renseigné après livraison via webhook.
+  cost              Decimal?        @db.Decimal(10, 5)
+  /// Devise ISO du coût (ex: "EUR", "USD")
+  costUnit          String?         @map("cost_unit")
+  /// Message d'erreur en cas d'échec
+  error             String?
+  /// Date de création du log
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  @@map("message_logs")
 }

@@ -1,0 +1,68 @@
+schema: 1
+story: "6.1"
+story_title: "Emails transactionnels de confirmation"
+gate: PASS
+status_reason: "Tous les ACs sont implémentés et vérifiés. Tests unitaires 8/8. Pattern fire-and-forget correctement appliqué. Refactoring formatDate extrait en utilitaire partagé."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-05-21T22:50:00Z"
+
+waiver: { active: false }
+
+top_issues:
+  - id: "TEST-001"
+    severity: low
+    finding: "Pas de tests unitaires pour send-cancellation.ts et send-practitioner-notify.ts"
+    suggested_action: "Ajouter tests similaires à send-confirmation.test.ts pour les 2 autres helpers (fonctions bridge minces — risque faible)"
+    suggested_owner: dev
+  - id: "SCHEMA-001"
+    severity: low
+    finding: "EmailLog.appointmentId n'a pas de relation Prisma vers Appointment (pas de FK déclarée)"
+    suggested_action: "Acceptable pour MVP audit log — envisager une FK explicite si story 8.1 requiert des jointures EmailLog↔Appointment"
+    suggested_owner: dev
+  - id: "DEP-001"
+    severity: low
+    finding: "@react-email/components@1.0.12 est déprécié (npm warning)"
+    suggested_action: "Migrer vers les packages individuels @react-email/* lors d'une story de maintenance"
+    suggested_owner: dev
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 3 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Tests manquants pour send-cancellation et send-practitioner-notify"
+      - "Dépendance dépréciée @react-email/components"
+
+quality_score: 90
+expires: "2026-06-04T00:00:00Z"
+
+evidence:
+  tests_reviewed: 8
+  risks_identified: 3
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "cancellationToken UUID opaque (non-JWT), non exposé avant création. Pas de PII dans les erreurs renvoyées au client. Fire-and-forget garantit que les erreurs email ne remontent pas."
+  performance:
+    status: PASS
+    notes: "Pattern fire-and-forget — les emails ne bloquent pas la réponse HTTP. La création de RDV n'est pas impactée par les latences Resend."
+  reliability:
+    status: PASS
+    notes: "Double filet : sendEmail absorbe toutes les exceptions + catch() sur les call sites. EmailLog trace les échecs. La double résistance aux pannes DB (catch sur EmailLog.create) est couverte par les tests."
+  maintainability:
+    status: PASS
+    notes: "Après refactoring QA : formatDate centralisé dans lib/email/templates/format.ts. Modules bien séparés (client, send-*, templates). CABINET_INFO découplé de 7.1."
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Ajouter tests unitaires pour send-cancellation.ts et send-practitioner-notify.ts"
+      refs: ["lib/email/send-cancellation.ts", "lib/email/send-practitioner-notify.ts"]
+    - action: "Migrer @react-email/components vers packages individuels @react-email/*"
+      refs: ["package.json", "lib/email/templates/"]
+    - action: "Ajouter FK Prisma EmailLog→Appointment si story 8.1 nécessite des jointures"
+      refs: ["prisma/schema.prisma"]

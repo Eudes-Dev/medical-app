@@ -17,7 +17,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/loading-button";
 import { InputGroup } from "@/components/ui/input-group";
 import {
   patientSchema,
@@ -152,13 +152,14 @@ export function PatientForm({
 
       {/* Bouton de soumission aligné sur le design system */}
       <div className="pt-2">
-        <Button
+        <LoadingButton
           type="submit"
           className="w-full bg-[#2563eb] hover:bg-[#2563eb]/90"
-          disabled={isBusy}
+          isLoading={isBusy}
+          loadingText="Enregistrement…"
         >
-          {isBusy ? "En cours..." : submitLabel}
-        </Button>
+          {submitLabel}
+        </LoadingButton>
       </div>
     </form>
   );

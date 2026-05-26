@@ -50,6 +50,47 @@ Le `globalSetup` :
 - **DB** : ne JAMAIS modifier la dev DB ; tout passe par `prisma/seed-e2e.ts`
 - **Auth** : storageState partagé via `global-setup.ts` ; ne pas réauthentifier dans les tests
 
+## Suites 5.2 — Sécurisation & Tests E2E
+
+La story 5.2 ajoute trois suites supplémentaires qui réutilisent intégralement
+l'infrastructure ci-dessus (même `playwright.config.ts`, même `global-setup`,
+même `storageState`) :
+
+| Fichier | Couvre |
+|---|---|
+| `tests/e2e/public-booking/4.2-flux-invite.spec.ts` | Réservation invité (nominal, validation client, conflit `SLOT_TAKEN`) — `storageState` overridé à vide |
+| `tests/e2e/auth/1.3-auth-praticien.spec.ts` | Connexion, rejet credentials invalides, déconnexion — `storageState` vide |
+| `tests/e2e/auth/1.3-protection-routes.spec.ts` | Routes `/dashboard/*` non auth → redirection `/login` — `storageState` vide |
+| `tests/e2e/auth/1.3-protection-routes-authenticated.spec.ts` | Mêmes routes une fois connecté → status 200 — `storageState` par défaut (pas d'override) |
+
+### Lancer la suite complète
+
+```bash
+npm run test:e2e:db:reset   # reset + seed (idempotent)
+npm run test:e2e            # exécute les projects desktop + mobile
+```
+
+### Consulter le rapport HTML
+
+Playwright écrit le rapport HTML dans `playwright-report/` à chaque run.
+
+```bash
+npx playwright show-report
+```
+
+### Pré-requis `.env.test` (story 5.2)
+
+En plus des variables déjà documentées plus haut :
+
+```
+E2E_PRACTITIONER_EMAIL=...
+E2E_PRACTITIONER_PASSWORD=...
+```
+
+Ces deux variables alimentent à la fois le seed (`prisma/seed-e2e.ts`) et le
+helper `loginAsPractitioner`. Sans elles, les tests d'auth se mettent en
+`test.skip()`.
+
 ## Références
 
 - [docs/qa/assessments/3.1-test-design-20260129.md](../../docs/qa/assessments/3.1-test-design-20260129.md)

@@ -1,13 +1,12 @@
 /**
- * Composant PatientTableSkeleton
+ * PatientTableSkeleton — fallback de chargement pour la table des patients
+ * (story 2.1 initiale, étendue story 5.1 AC 2, 11 pour l'accessibilité).
  *
- * Affiche un skeleton de chargement pour la table des patients.
- * Utilisé pendant le chargement initial ou lors des changements de page/recherche.
+ * Affiche 10 lignes (= taille de page) avec `role="status"` + `aria-label`.
  *
- * Ce composant utilise le composant Skeleton de Shadcn UI pour créer
- * un effet de chargement visuel.
- *
- * @module components/patients/patient-table-skeleton
+ * NB rev 1.2 story 5.1 : demande de migrer vers Skeleton animate-ui ; ce
+ * composant n'existe pas dans le registre animate-ui (vérifié). On conserve
+ * le Skeleton Shadcn — divergence documentée en Completion Notes.
  */
 
 import {
@@ -20,16 +19,15 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 
-/**
- * Composant PatientTableSkeleton.
- *
- * Affiche 10 lignes de skeleton (correspondant à la pagination de 10 résultats).
- *
- * @returns JSX du skeleton de la table
- */
 export function PatientTableSkeleton() {
   return (
-    <div className="rounded-md border">
+    <div
+      role="status"
+      aria-live="polite"
+      aria-label="Chargement des patients"
+      className="rounded-md border"
+    >
+      <span className="sr-only">Chargement en cours…</span>
       <Table>
         <TableHeader>
           <TableRow>
@@ -51,7 +49,6 @@ export function PatientTableSkeleton() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {/* Afficher 10 lignes de skeleton (nombre de résultats par page) */}
           {Array.from({ length: 10 }).map((_, index) => (
             <TableRow key={index}>
               <TableCell>

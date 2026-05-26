@@ -1,0 +1,85 @@
+schema: 1
+story: "5.1"
+story_title: "Feedback Utilisateur (UX)"
+gate: CONCERNS
+status_reason: "Implémentation fonctionnellement complète (16/16 AC), 25/25 tests verts et helpers centralisés conformes ; mais plusieurs divergences vs spec rev 1.2 (Skeleton/Button Shadcn dans loading/error pages, EmptyState placé dans wrapper plutôt que data-table, pas de Suspense streaming) et 3 items DoD manuels (build prod, responsive, clavier) non vérifiés."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-05-18T15:55:00Z"
+
+waiver: { active: false }
+
+top_issues:
+  - id: "UI-001"
+    severity: medium
+    finding: "10 fichiers de segment (loading/error/not-found) importent `@/components/ui/button` ou `@/components/ui/skeleton` Shadcn, en violation explicite de la DoD rev 1.2 qui interdit ces imports dans le périmètre de la story."
+    suggested_action: "Soit migrer les Button vers `@/components/animate-ui/components/buttons/button` (le Skeleton reste justifié par l'absence amont — documenté), soit formaliser une waiver écrite du PO étendant la divergence Skeleton au Button."
+    suggested_owner: dev
+  - id: "AC-001"
+    severity: medium
+    finding: "AC 1 & 2 demandent `<Suspense fallback={...}>` autour de la grille calendrier et de la table patients. L'implémentation utilise un rendu conditionnel `loading && length===0` car les pages sont Client Components (héritage 3.2/3.3, 2.1). L'esprit de l'AC est respecté (skeleton visible pendant le premier fetch) mais la lettre ne l'est pas."
+    suggested_action: "Confirmer avec le PO que la divergence est acceptée pour MVP, ou planifier une story dédiée migration Server Components + Suspense streaming."
+    suggested_owner: po
+  - id: "AC-002"
+    severity: low
+    finding: "AC 8 désigne `components/patients/patient-data-table.tsx` comme hôte des EmptyState. L'implémentation les place dans `patients-table-wrapper.tsx` (parent). Fonctionnellement équivalent, mais diverge de la spec."
+    suggested_action: "Aucune action si l'architecture wrapper/table est validée. Sinon, déplacer la logique dans data-table."
+    suggested_owner: dev
+  - id: "DOD-001"
+    severity: low
+    finding: "3 items DoD non vérifiés : (1) `next build && next start` pour valider l'absence de flash blanc sur les 6 loading.tsx, (2) responsive 375/1280 sur EmptyState, (3) navigation clavier sur LoadingButton."
+    suggested_action: "Exécuter le QA manuel avant statut « Done »."
+    suggested_owner: dev
+
+quality_score: 80
+expires: "2026-06-01T00:00:00Z"
+
+evidence:
+  tests_reviewed: 25
+  risks_identified: 4
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16]
+    ac_gaps: [13]
+  notes: |
+    AC 13 (responsive 375/1280) listé en gap car aucun test composant ne valide
+    explicitement le comportement responsive — gap acceptable (visuel) mais
+    devrait être couvert par QA manuel listé en DoD.
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "Helper `mapServerErrorToMessage` empêche toute fuite Prisma/Postgres côté client (AC 6/15/16). Aucune PII dans les toasts d'erreur. Tests `error-mapper.test.ts` couvrent les 4 codes + fallback."
+  performance:
+    status: PASS
+    notes: "Skeletons légers (CSS animate-pulse), pas de hydration supplémentaire. CalendarSkeleton stable (98 cellules max, pas de calcul lourd)."
+  reliability:
+    status: PASS
+    notes: "6 error.tsx + 2 not-found.tsx capturent les exceptions de segment. `console.error` côté client + TODO Sentry documenté pour 13.3."
+  maintainability:
+    status: CONCERNS
+    notes: "Centralisation toast/error correcte. Mais cast `as unknown as ComponentType<Record<string, unknown>>` dans LoadingButton (ligne 55) déconnecte le typage des consommateurs : aucune erreur si on passe un prop invalide (ex. variant typo). À surveiller à la prochaine évolution animate-ui."
+
+recommendations:
+  immediate:
+    - action: "Documenter la divergence Button Shadcn dans les error/not-found ou migrer vers animate-ui (10 fichiers)."
+      refs:
+        - "app/dashboard/error.tsx:6"
+        - "app/dashboard/calendar/error.tsx:6"
+        - "app/dashboard/patients/error.tsx:6"
+        - "app/dashboard/patients/[id]/error.tsx:6"
+        - "app/dashboard/patients/[id]/not-found.tsx:4"
+        - "app/(public)/[cabinet-slug]/error.tsx:6"
+        - "app/(public)/[cabinet-slug]/book/error.tsx:6"
+    - action: "Exécuter le QA manuel DoD : build prod (flash blanc), responsive 375/1280, focus clavier LoadingButton."
+      refs:
+        - "docs/stories/5.1.feedback-utilisateur-ux.story.md:355"
+  future:
+    - action: "Migrer pages calendrier/patients en Server Components pour exploiter `<Suspense>` streaming (AC 1/2 lettre)."
+      refs:
+        - "app/dashboard/calendar/page.tsx:92"
+        - "components/patients/patients-table-wrapper.tsx"
+    - action: "Renforcer le typage de LoadingButton (resserrer l'intersection avec ButtonProps animate-ui) pour récupérer l'IntelliSense."
+      refs:
+        - "components/ui/loading-button.tsx:55"
+    - action: "Ajouter un test composant responsive (rendu mobile) sur EmptyState pour couvrir AC 13."
+      refs:
+        - "tests/component/ui/empty-state.test.tsx"

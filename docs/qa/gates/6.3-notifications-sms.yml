@@ -1,0 +1,177 @@
+schema: 1
+story: "6.3"
+story_title: "Notifications SMS (optionnel)"
+gate: PASS
+status_reason: "Re-review après application des correctifs QA (v1.2). Les 2 issues medium de la review initiale sont résolues : webhook Twilio durci par signature HMAC native (`validateRequest`, 403 si invalide — SEC-001) et helpers de rappel désormais porteurs du lien d'opt-out + prénom, params morts retirés (DEAD-PARAM-001). Les 3 low (UX-001, SCHEMA-001, CODE-001) sont également traitées. 49 tests verts sur le périmètre, lint/tsc 0 sur les fichiers de la story. Reste 2 items low non bloquants à tracer hors 6.3 (lien `/book/cancel` 404 transverse 6.1 ; longueur SMS rappel)."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-05-26T14:20:00Z"
+
+waiver: { active: false }
+
+top_issues:
+  - id: "CANCEL-ROUTE-001"
+    severity: low
+    finding: "Le SMS de confirmation (et l'email de confirmation 6.1) contient un lien `…/{cabinet-slug}/book/cancel?token={uuid}`, mais aucune route `book/cancel` n'existe dans `app/(public)/`. Le patient cliquant sur le lien d'annulation tombe sur un 404. Transverse — la racine est dans la story 6.1 (ConfirmationEmail.tsx) ; 6.3 hérite du défaut via `sendConfirmationSms`. Le module SMS étant OFF par défaut, aucun impact opérationnel immédiat."
+    suggested_action: "Story transverse : créer la route publique `app/(public)/[cabinet-slug]/book/cancel/page.tsx` (résolution du `cancellationToken` → annulation du RDV), ou retirer le lien des notifications tant que la route n'existe pas. Aligner SMS confirmation + email 6.1."
+    suggested_owner: dev
+    refs:
+      - "lib/sms/send-confirmation-sms.ts:39"
+      - "lib/email/templates/ConfirmationEmail.tsx"
+  - id: "SMS-LEN-001"
+    severity: low
+    finding: "Le body du SMS de rappel inclut désormais le lien d'opt-out `{APP_URL}/unsubscribe?token={token}`. Avec un domaine de prod réel + token, le message frôle/dépasse 160 caractères (limite 1 segment GSM-7), ce qui double potentiellement le coût SMS. Aucun garde-fou ni test de longueur."
+    suggested_action: "Mesurer la longueur réelle en prod (domaine + token) ; envisager un raccourcisseur de lien d'opt-out (token court) ou un opt-out par mot-clé STOP natif Twilio. À surveiller plutôt qu'à corriger immédiatement."
+    suggested_owner: dev
+    refs:
+      - "lib/sms/send-reminder-sms.ts:43"
+      - "lib/sms/send-reminder-sms.ts:57"
+  - id: "TEST-INFRA-001"
+    severity: low
+    finding: "L'exécution `vitest run` en parallèle (mode par défaut) génère \"No test suite found\" sur les fichiers qui mockent `@/lib/prisma` — contention entre `vi.mock` cross-files. Workaround `--no-file-parallelism` (utilisé par dev) fait passer le périmètre. Pré-existant à 6.3."
+    suggested_action: "Story d'infrastructure : isoler les mocks Prisma (vmocks scopés, ou `vi.hoisted` partagé), ou pin `pool: 'forks'` + `singleFork: false` dans `vitest.config.ts`. Hors périmètre 6.3."
+    suggested_owner: dev
+    refs:
+      - "vitest.config.ts"
+  - id: "TEST-INFRA-002"
+    severity: low
+    finding: "`tests/integration/public-booking/{actions,guest-booking}.test.ts` échouent au load car `lib/email/client.ts` instancie `new Resend(...)` au module load, sans key en env de test. Pré-existant story 6.1 — pas une régression 6.3."
+    suggested_action: "Lazy-instanciation du client Resend (pattern `getTwilioClient()` introduit dans 6.3). Story de maintenance — hors périmètre 6.3."
+    suggested_owner: dev
+    refs:
+      - "lib/email/client.ts:16"
+      - "lib/sms/client.ts:21-32"
+
+resolved_issues:
+  - id: "SEC-001"
+    severity: medium
+    resolution: "Webhook durci : `twilio.validateRequest(authToken, x-twilio-signature, signedUrl, params)` — 403 si signature absente/invalide. URL signée reconstruite depuis NEXT_PUBLIC_APP_URL (proxy Vercel). Actif dès que TWILIO_AUTH_TOKEN configuré. Test 403 ajouté."
+    refs:
+      - "app/api/webhooks/twilio/status/route.ts:58-72"
+      - "tests/integration/api/twilio-status-webhook.test.ts:76-85"
+  - id: "DEAD-PARAM-001"
+    severity: medium
+    resolution: "Décision PO : opt-out injecté. Les rappels D-1/H-2 portent `Stop rappels : {APP_URL}/unsubscribe?token={optOutToken}` + prénom. Param mort `cabinetSlug` retiré de `SendReminderSmsParams` et des 2 call-sites cron (import CABINET_DEFAULT_SLUG supprimé). Nouveau test `send-reminder-sms.test.ts` (présence du lien d'opt-out)."
+    refs:
+      - "lib/sms/send-reminder-sms.ts"
+      - "app/api/cron/reminders/route.ts:50-58"
+      - "tests/unit/lib/sms/send-reminder-sms.test.ts"
+  - id: "UX-001"
+    severity: low
+    resolution: "Décision PO : SMS de confirmation reformulé « RDV enregistré le … » (cohérent avec status PENDING à la création)."
+    refs:
+      - "lib/sms/send-confirmation-sms.ts:43"
+  - id: "SCHEMA-001"
+    severity: low
+    resolution: "`@unique` posé sur `MessageLog.providerMessageId` + migration `20260526000002_add_unique_provider_message_id`. `updateMany` conservé volontairement (idempotent sur SID inconnu, pas de P2025), commenté dans le webhook."
+    refs:
+      - "prisma/schema.prisma:247"
+      - "prisma/migrations/20260526000002_add_unique_provider_message_id/migration.sql"
+  - id: "CODE-001"
+    severity: low
+    resolution: "`patientEmail: data.email` (toujours undefined dans la branche else) retiré du call-site `sendConfirmationSms`."
+    refs:
+      - "app/(public)/[cabinet-slug]/book/actions.ts:219-237"
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 0, low: 4 }
+  recommendations:
+    must_fix: []
+    monitor:
+      - "Créer la route `book/cancel` (transverse 6.1) ou retirer le lien d'annulation des notifications"
+      - "Surveiller la longueur du SMS de rappel (opt-out URL + token) avant activation prod"
+      - "Stabiliser l'exécution parallèle Vitest (mocks Prisma cross-files) — story dédiée"
+
+quality_score: 95
+expires: "2026-06-09T00:00:00Z"
+
+evidence:
+  tests_reviewed: 49
+  risks_identified: 4
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6]
+    ac_gaps: []
+    given_when_then:
+      - ac: 1
+        scenario: "Patient sans email avec mobile FR → SMS de confirmation envoyé"
+        given: "createGuestBooking est appelée avec `email` falsy et `phone: \"0612345678\"`"
+        when: "Le RDV PENDING est créé et `getPatientSmsTarget` retourne `+33612345678`"
+        then: "`sendConfirmationSms` est invoqué (fire-and-forget) avec `type: CONFIRMATION`, body « RDV enregistré »"
+        tests:
+          - "tests/unit/lib/sms/send-confirmation-sms.test.ts (3 tests)"
+          - "Branchement vérifié dans app/(public)/[cabinet-slug]/book/actions.ts:219-237"
+      - ac: 2
+        scenario: "Patient avec mobile FR → SMS rappel D-1 et H-2 en complément de l'email, avec opt-out"
+        given: "Un RDV CONFIRMED + patient avec `phone: \"0612345678\"`, `reminderOptOut: false`, `email: …`"
+        when: "Le cron `/api/cron/reminders` s'exécute à 17h UTC (D-1) ou dans la fenêtre H-2"
+        then: "Email ET SMS (avec lien opt-out + prénom) envoyés en parallèle, `reminderD1SentAt`/`reminderH2SentAt` posé"
+        tests:
+          - "tests/integration/cron/reminders.test.ts (15 tests, incl. SMS parallèle + fixe→email seul)"
+          - "tests/unit/lib/sms/send-reminder-sms.test.ts (3 tests, lien opt-out présent)"
+      - ac: 3
+        scenario: "Coût du SMS journalisé via le webhook Twilio Status"
+        given: "Un MessageLog SENT avec `providerMessageId: SM_abc` (désormais @unique)"
+        when: "Twilio POST `/api/webhooks/twilio/status` avec signature valide, `Price=-0.05000`, `PriceUnit=EUR`"
+        then: "`MessageLog.cost = 0.05` (valeur absolue), `costUnit = EUR` (updateMany sur SID unique)"
+        tests:
+          - "tests/integration/api/twilio-status-webhook.test.ts (8 tests, incl. négatif→abs + 403 HMAC)"
+      - ac: 4
+        scenario: "Validation E.164 + mobiles FR uniquement"
+        given: "Un numéro brut au format national ou international avec/sans espaces"
+        when: "`toE164` + `isMobileFR` sont appelés"
+        then: "Mobile +336/+337 → E.164 OK ; fixe (+331…+335) ou invalide → null"
+        tests:
+          - "tests/unit/lib/sms/phone.test.ts (13 tests)"
+      - ac: 5
+        scenario: "Échec SMS → fallback email si disponible, sinon log FAILED silencieux"
+        given: "`twilio.messages.create` rejette une erreur"
+        when: "Le helper `sendSms` est invoqué avec et sans `fallbackEmailFactory`"
+        then: "MessageLog FAILED créé + `fallbackEmailFactory` invoqué si fourni ; aucun throw côté appelant"
+        tests:
+          - "tests/unit/lib/sms/client.test.ts (7 tests, incl. fallback + no-op)"
+      - ac: 6
+        scenario: "Toggle global SMS_ENABLED=false → no-op"
+        given: "`SMS_ENABLED !== \"true\"`"
+        when: "`sendSms(...)` est appelé"
+        then: "Retour immédiat, aucun appel Twilio, aucun MessageLog créé"
+        tests:
+          - "tests/unit/lib/sms/client.test.ts > 'no-op quand SMS_ENABLED n\\'est pas 'true''"
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "SEC-001 résolu : webhook protégé par double barrière (secret query string + signature HMAC native Twilio `validateRequest`, 403 si invalide). Secrets documentés/non commités. Aucun PII médical dans le body SMS (date + lien tokenisé UUID v4). Pas de fuite d'erreur vers l'appelant."
+  performance:
+    status: PASS
+    notes: "Fire-and-forget partout (booking action, cron). `SMS_ENABLED=false` retourne avant tout I/O. Lazy-init du client Twilio. `getPatientSmsTarget` synchrone."
+  reliability:
+    status: PASS
+    notes: "Pattern 6.1/6.2 — aucun throw, journalisation systématique MessageLog SENT/FAILED, fallback SMS→email, idempotence rappels via flags reminderD1SentAt/reminderH2SentAt. Échec MessageLog.create absorbé. Webhook retourne 500 sur erreur DB → retry Twilio."
+  maintainability:
+    status: PASS
+    notes: "DEAD-PARAM-001 / CODE-001 résolus : params morts retirés, signatures honnêtes. Séparation phone/client/helpers nette, JSDoc présent. Réserve mineure : instabilité Vitest parallèle (workaround `--no-file-parallelism`, pré-existant, tracé TEST-INFRA-001)."
+
+recommendations:
+  immediate: []  # Aucun blocant — story livrable, SMS_ENABLED=false par défaut
+  before_production_activation:
+    - action: "Créer la route `book/cancel` ou retirer le lien d'annulation des notifications (SMS + email)"
+      refs:
+        - "lib/sms/send-confirmation-sms.ts:39"
+        - "lib/email/templates/ConfirmationEmail.tsx"
+    - action: "Mesurer la longueur du SMS de rappel (opt-out URL + token) — risque multi-segment"
+      refs:
+        - "lib/sms/send-reminder-sms.ts"
+  future:
+    - action: "Lazy-init du client Resend (parallèle au pattern Twilio) — débloque les tests integration public-booking"
+      refs:
+        - "lib/email/client.ts:16"
+    - action: "Stabiliser l'exécution parallèle Vitest (mocks Prisma cross-files)"
+      refs:
+        - "vitest.config.ts"
+
+history:
+  - at: "2026-05-26T13:35:00Z"
+    gate: CONCERNS
+    note: "Review initiale (v1.1). 2 medium (SEC-001 webhook query-string, DEAD-PARAM-001 params morts) + 4 low. 61 tests verts."
+  - at: "2026-05-26T14:20:00Z"
+    gate: PASS
+    note: "Re-review après apply-qa-fixes (v1.2). SEC-001 + DEAD-PARAM-001 + UX-001 + SCHEMA-001 + CODE-001 résolus et vérifiés. 49 tests verts. Reste 2 low non bloquants hors 6.3 (lien book/cancel transverse 6.1, longueur SMS)."

@@ -226,6 +226,115 @@
   50% { transform: rotate(10deg); }
 }
 
+/* ============================================
+   ANIMATIONS LANDING PAGE PUBLIQUE
+   ============================================
+   Toutes ces animations sont conçues pour boucler à l'infini avec
+   des courbes d'easing douces (ease-in-out) afin de rester
+   apaisantes — cohérent avec le contexte médical.
+   Elles utilisent uniquement `transform` et `opacity` pour rester
+   GPU-friendly (60fps) et respecter `prefers-reduced-motion`. */
+
+/* Lévitation douce — pour la carte mockup du Hero */
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%      { transform: translateY(-14px) rotate(-1.5deg); }
+}
+
+/* Pulse "live" — pour le point vert "ouvert" du badge */
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%      { transform: scale(1.6); opacity: 0.4; }
+}
+
+/* Halo concentrique qui s'étire — derrière le point vert */
+@keyframes pulse-ring {
+  0%   { transform: scale(0.6); opacity: 0.7; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* Effet de chargement type "shimmer" sur les barres grises du mockup */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Rotation lente d'un blob décoratif en fond */
+@keyframes blob-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(30px, -20px) scale(1.08); }
+  66%      { transform: translate(-20px, 25px) scale(0.95); }
+}
+
+/* Surbrillance qui balaie le numéro actif (le "1") du stepper */
+@keyframes sweep {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+
+/* Tirets animés entre les étapes du parcours (effet "ant march") */
+@keyframes dash-march {
+  0%   { background-position: 0 0; }
+  100% { background-position: 24px 0; }
+}
+
+/* Apparition douce vers le haut — utilisé à l'arrivée sur la page */
+@keyframes fade-up {
+  0%   { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Petit rebond du checkmark vert du mockup */
+@keyframes pop-in {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+/* Classes utilitaires (préfixées `anim-`) appliquées dans les composants.
+   Toutes respectent prefers-reduced-motion via la règle globale plus bas. */
+.anim-float        { animation: float-soft 6s ease-in-out infinite; }
+.anim-pulse-dot    { animation: pulse-dot 1.8s ease-in-out infinite; }
+.anim-pulse-ring   { animation: pulse-ring 1.8s ease-out infinite; }
+.anim-blob         { animation: blob-drift 18s ease-in-out infinite; }
+.anim-sweep        { animation: sweep 2.6s ease-in-out infinite; }
+.anim-dash         { animation: dash-march 1.2s linear infinite; }
+.anim-fade-up      { animation: fade-up 0.7s ease-out both; }
+.anim-pop          { animation: pop-in 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* Shimmer = dégradé qui défile horizontalement. */
+.anim-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--muted) 70%, transparent) 0%,
+    color-mix(in oklab, var(--muted) 30%, transparent) 50%,
+    color-mix(in oklab, var(--muted) 70%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.4s ease-in-out infinite;
+}
+
+/* Délais utilitaires pour orchestrer un effet de cascade (stagger) */
+.anim-delay-100 { animation-delay: 0.1s; }
+.anim-delay-200 { animation-delay: 0.2s; }
+.anim-delay-300 { animation-delay: 0.3s; }
+.anim-delay-400 { animation-delay: 0.4s; }
+.anim-delay-500 { animation-delay: 0.5s; }
+
+/* Accessibilité : on coupe toutes les animations infinies si l'utilisateur
+   préfère un mouvement réduit (vestibulaire, etc.). */
+@media (prefers-reduced-motion: reduce) {
+  .anim-float,
+  .anim-pulse-dot,
+  .anim-pulse-ring,
+  .anim-blob,
+  .anim-sweep,
+  .anim-dash,
+  .anim-shimmer {
+    animation: none !important;
+  }
+}
+
 /**
  * Motif hachuré rose utilisé pour signaler une colonne "surchargée" dans
  * l'agenda (calendrier). On utilise un linear-gradient répété pour rester
@@ -287,4 +396,28 @@
 .status-cancelled {
   color: var(--medical-error-dark);
   background-color: var(--medical-error-light);
+}
+
+/* ============================================
+   Animations pour la confirmation de rendez-vous (Story 4.3)
+   ============================================ */
+@keyframes cf-bounce-in {
+  0%   { transform: scale(0.4); opacity: 0; }
+  60%  { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes cf-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes cf-ripple {
+  0%   { opacity: .55; transform: scale(0.8); }
+  100% { opacity: 0;   transform: scale(1.9); border-width: 1px; }
+}
+@keyframes cf-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes cf-rise {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
 }

@@ -1,0 +1,72 @@
+schema: 1
+story: "4.1"
+story_title: "Page de Réservation Publique"
+gate: CONCERNS
+status_reason: >-
+  Implémentation conforme aux 9 ACs avec 21 tests verts, mais deux NFR non couverts
+  bloquent la mise en production : rate limiter absent sur Server Action publique
+  (TODO 13.5) et génération des créneaux en TZ locale serveur (drift attendu sur Vercel UTC).
+reviewer: "Quinn (Test Architect)"
+updated: "2026-05-16T17:50:00Z"
+expires: "2026-05-30T17:50:00Z"
+
+quality_score: 80
+
+evidence:
+  tests_reviewed: 21
+  risks_identified: 2
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    ac_gaps: []
+
+top_issues:
+  - id: "SEC-001"
+    severity: medium
+    title: "Rate limiter absent sur Server Action publique"
+    description: >-
+      `getAvailableSlots` est une action non authentifiée exposée publiquement.
+      AC 8 prévoit explicitement un rate limiter (story 13.5) ; un TODO est en place
+      mais non câblé. Risque : scraping de la disponibilité, DoS applicatif.
+    refs:
+      - "app/(public)/[cabinet-slug]/book/actions.ts:59"
+    suggested_owner: dev
+  - id: "REL-001"
+    severity: medium
+    title: "Génération de créneaux dépendante de la TZ serveur"
+    description: >-
+      `generateSlots` (lib/cabinet/slots.ts) utilise `setHours` en heure locale.
+      Sur un runtime UTC (Vercel par défaut) un créneau "10:00" affiché au patient
+      correspondra à 12:00 (été) ou 11:00 (hiver) heure de Paris. À fixer explicitement
+      (date-fns-tz Europe/Paris) ou à documenter comme exigence de déploiement.
+    refs:
+      - "lib/cabinet/slots.ts:30"
+    suggested_owner: dev
+
+waiver:
+  active: false
+
+nfr_validation:
+  security:
+    status: CONCERNS
+    notes: "Validation Zod et select Prisma sans PII OK. Rate limiter manquant (TODO 13.5)."
+  performance:
+    status: PASS
+    notes: "Index Prisma sur startTime, fenêtres bornées (14j UI / 90j action). useTransition côté client."
+  reliability:
+    status: CONCERNS
+    notes: "Erreurs DB capturées et exposées proprement côté client. Risque TZ serveur sur la génération de créneaux."
+  maintainability:
+    status: PASS
+    notes: "Séparation config/slots/actions claire, logique métier extraite et testée indépendamment de Prisma."
+
+recommendations:
+  immediate:
+    - action: "Brancher le rate limiter de la story 13.5 sur getAvailableSlots avant prod"
+      refs: ["app/(public)/[cabinet-slug]/book/actions.ts"]
+    - action: "Fixer la timezone de generateSlots à Europe/Paris (date-fns-tz)"
+      refs: ["lib/cabinet/slots.ts"]
+  future:
+    - action: "Ajouter le test E2E Playwright responsive lors de la livraison conjointe 4.1+4.2+4.3"
+      refs: ["tests/e2e/"]
+    - action: "Mutualiser les messages d'erreur public dans un module i18n quand 4.2/4.3 livrées"
+      refs: ["app/(public)/[cabinet-slug]/book/actions.ts"]
