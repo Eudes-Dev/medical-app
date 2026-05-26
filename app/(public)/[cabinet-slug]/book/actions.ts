@@ -16,7 +16,7 @@
 import { addDays, addMinutes, startOfDay, startOfToday, endOfDay } from "date-fns";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { CABINET_INFO } from "@/lib/cabinet/config";
+import { CABINET_INFO, CABINET_DEFAULT_SLUG } from "@/lib/cabinet/config";
 import { filterAvailableSlots, isOverlapping } from "@/lib/cabinet/slots";
 import {
   guestBookingSchema,
@@ -27,7 +27,6 @@ import { sendConfirmationEmail } from "@/lib/email/send-confirmation";
 import { sendPractitionerNotify } from "@/lib/email/send-practitioner-notify";
 import { sendConfirmationSms } from "@/lib/sms/send-confirmation-sms";
 import { getPatientSmsTarget } from "@/lib/sms/phone";
-import { CABINET_DEFAULT_SLUG } from "@/lib/cabinet/config";
 
 /** Horizon maximal de réservation (en jours). */
 const MAX_BOOKING_HORIZON_DAYS = 90;
