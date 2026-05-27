@@ -19,6 +19,7 @@ export default function SettingsPage() {
           title: "Horaires d'ouverture",
           description: "Définir les plages de disponibilité hebdomadaires.",
           storyId: "7.1",
+          href: "/dashboard/settings/schedule",
         },
         {
           title: "Congés & jours fériés",

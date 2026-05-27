@@ -33,6 +33,8 @@ export interface PlannedFeature {
   title: string;
   description?: string;
   storyId?: string;
+  /** Si défini, la fonctionnalité est livrée : son titre devient un lien. */
+  href?: string;
 }
 
 interface PlaceholderPageProps {
@@ -108,9 +110,18 @@ export function PlaceholderPage({
                     className="bg-muted/40 flex flex-col gap-1 rounded-md border p-3"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium">
-                        {feature.title}
-                      </span>
+                      {feature.href ? (
+                        <Link
+                          href={feature.href}
+                          className="text-primary text-sm font-medium underline-offset-4 hover:underline"
+                        >
+                          {feature.title}
+                        </Link>
+                      ) : (
+                        <span className="text-sm font-medium">
+                          {feature.title}
+                        </span>
+                      )}
                       {feature.storyId && (
                         <Badge variant="outline" className="text-xs">
                           {feature.storyId}

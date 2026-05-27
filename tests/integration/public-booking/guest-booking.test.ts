@@ -40,6 +40,9 @@ vi.mock("@/lib/prisma", () => ({
       findFirst: vi.fn(),
       create: vi.fn(),
     },
+    workingHours: {
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -65,6 +68,11 @@ describe("createGuestBooking (Story 4.2)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cookieStore.clear();
+    // Story 7.1 : createGuestBooking lit WorkingHours pour la durée du créneau.
+    // Par défaut, une plage 08:00–18:00 / 30 couvre le créneau de test (10:00).
+    vi.mocked(prisma.workingHours.findMany).mockResolvedValue([
+      { startTime: "08:00", endTime: "18:00", slotDuration: 30 },
+    ] as never);
   });
 
   it("VALIDATION : refuse un téléphone US sans toucher la base", async () => {
@@ -181,5 +189,49 @@ describe("createGuestBooking (Story 4.2)", () => {
       endOfDay(slot),
     );
     expect(call.select).toEqual({ startTime: true, endTime: true });
+  });
+
+  // ---- Régression story 7.1 (durée du créneau = slotDuration de la plage) ----
+
+  it("7.1 : endTime = startTime + slotDuration de la plage contenant le créneau", async () => {
+    const slot = futureSlot(); // 10:00
+    // Plage de l'après-midi en 45 min couvrant 10:00 ⇒ endTime = 10:45.
+    vi.mocked(prisma.workingHours.findMany).mockResolvedValue([
+      { startTime: "08:00", endTime: "12:00", slotDuration: 45 },
+    ] as never);
+    vi.mocked(prisma.appointment.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.patient.findFirst).mockResolvedValue(null as never);
+    vi.mocked(prisma.patient.create).mockResolvedValue({ id: "p" } as never);
+    vi.mocked(prisma.appointment.create).mockResolvedValue({ id: "a" } as never);
+
+    await createGuestBooking({ ...validInput(), slotISO: slot.toISOString() });
+
+    const createCall = vi.mocked(prisma.appointment.create).mock.calls[0][0]!;
+    const { startTime, endTime } = createCall.data as {
+      startTime: Date;
+      endTime: Date;
+    };
+    expect((endTime.getTime() - startTime.getTime()) / 60_000).toBe(45);
+  });
+
+  it("7.1 : fallback 30 min si aucune plage ne couvre le créneau choisi", async () => {
+    const slot = futureSlot(); // 10:00
+    // Plage du matin se terminant à 09:00 ⇒ ne couvre pas 10:00 ⇒ fallback 30.
+    vi.mocked(prisma.workingHours.findMany).mockResolvedValue([
+      { startTime: "08:00", endTime: "09:00", slotDuration: 60 },
+    ] as never);
+    vi.mocked(prisma.appointment.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.patient.findFirst).mockResolvedValue(null as never);
+    vi.mocked(prisma.patient.create).mockResolvedValue({ id: "p" } as never);
+    vi.mocked(prisma.appointment.create).mockResolvedValue({ id: "a" } as never);
+
+    await createGuestBooking({ ...validInput(), slotISO: slot.toISOString() });
+
+    const createCall = vi.mocked(prisma.appointment.create).mock.calls[0][0]!;
+    const { startTime, endTime } = createCall.data as {
+      startTime: Date;
+      endTime: Date;
+    };
+    expect((endTime.getTime() - startTime.getTime()) / 60_000).toBe(30);
   });
 });

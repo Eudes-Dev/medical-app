@@ -20,6 +20,9 @@ export const TOAST_MESSAGES = {
   booking: {
     confirmed: "Rendez-vous confirmé !",
   },
+  schedule: {
+    saved: "Horaires enregistrés.",
+  },
   errors: {
     validation: "Vérifiez les informations saisies.",
     slotTaken: "Ce créneau vient d'être réservé. Merci d'en choisir un autre.",

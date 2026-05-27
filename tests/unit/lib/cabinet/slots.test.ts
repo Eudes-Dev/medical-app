@@ -1,9 +1,13 @@
 /**
- * Tests unitaires de la logique de génération / filtrage de créneaux
- * (Story 4.1, Task 8).
+ * Tests unitaires de la génération / filtrage de créneaux.
+ *
+ * Migré vers l'API « plages » (story 7.1) : `generateDaySlots(date, ranges)`
+ * et `filterAvailableSlots(date, appointments, ranges)` remplacent l'ancienne
+ * génération basée sur `OpeningHours`.
  *
  * Couvre:
- * - `generateSlots`: nombre et bornes pour des horaires 8h-18h, 30min
+ * - `generateDaySlots`: une plage 08:00–18:00/30 → 20 créneaux ; deux plages
+ *   avec pause déjeuner ; plage trop courte → 0 ; durée 45 sur 09:00–12:00 → 4
  * - `isOverlapping`: cas limites de chevauchement
  * - `filterAvailableSlots`: filtre selon des rendez-vous existants
  */
@@ -11,33 +15,78 @@
 import { describe, expect, it } from "vitest";
 import {
   filterAvailableSlots,
-  generateSlots,
+  generateDaySlots,
   isOverlapping,
+  type WorkingHourRange,
 } from "@/lib/cabinet/slots";
 
-const DEFAULT_HOURS = { start: 8, end: 18, slotMinutes: 30 } as const;
+const FULL_DAY: WorkingHourRange[] = [
+  { startTime: "08:00", endTime: "18:00", slotDuration: 30 },
+];
 const DAY = new Date("2026-06-01T00:00:00");
 
-describe("generateSlots", () => {
-  it("génère 20 créneaux pour 8h-18h en pas de 30min", () => {
-    const slots = generateSlots(DAY, DEFAULT_HOURS);
+describe("generateDaySlots", () => {
+  it("génère 20 créneaux pour une plage 08:00–18:00 / 30 min", () => {
+    const slots = generateDaySlots(DAY, FULL_DAY);
     expect(slots).toHaveLength(20);
   });
 
   it("le premier créneau est à 08:00 et le dernier à 17:30", () => {
-    const slots = generateSlots(DAY, DEFAULT_HOURS);
-    expect(slots[0].getHours()).toBe(8);
-    expect(slots[0].getMinutes()).toBe(0);
-    expect(slots.at(-1)!.getHours()).toBe(17);
-    expect(slots.at(-1)!.getMinutes()).toBe(30);
+    const slots = generateDaySlots(DAY, FULL_DAY);
+    expect(slots[0].start.getHours()).toBe(8);
+    expect(slots[0].start.getMinutes()).toBe(0);
+    expect(slots.at(-1)!.start.getHours()).toBe(17);
+    expect(slots.at(-1)!.start.getMinutes()).toBe(30);
+    // La durée de la plage est portée par chaque créneau.
+    expect(slots[0].slotMinutes).toBe(30);
   });
 
   it("respecte le jour passé en paramètre", () => {
     const day = new Date("2026-12-25T15:00:00");
-    const [first] = generateSlots(day, DEFAULT_HOURS);
-    expect(first.getFullYear()).toBe(2026);
-    expect(first.getMonth()).toBe(11);
-    expect(first.getDate()).toBe(25);
+    const [first] = generateDaySlots(day, FULL_DAY);
+    expect(first.start.getFullYear()).toBe(2026);
+    expect(first.start.getMonth()).toBe(11);
+    expect(first.start.getDate()).toBe(25);
+  });
+
+  it("gère deux plages avec pause déjeuner et trie les créneaux", () => {
+    // 08:00–12:00 / 30 → 8 créneaux ; 14:00–18:00 / 30 → 8 créneaux = 16.
+    const ranges: WorkingHourRange[] = [
+      { startTime: "14:00", endTime: "18:00", slotDuration: 30 },
+      { startTime: "08:00", endTime: "12:00", slotDuration: 30 },
+    ];
+    const slots = generateDaySlots(DAY, ranges);
+    expect(slots).toHaveLength(16);
+    // Tri chronologique malgré l'ordre d'entrée inversé.
+    expect(slots[0].start.getHours()).toBe(8);
+    expect(slots.at(-1)!.start.getHours()).toBe(17);
+    expect(slots.at(-1)!.start.getMinutes()).toBe(30);
+    // Pas de créneau pendant la pause déjeuner (12:00–14:00).
+    expect(
+      slots.some((s) => s.start.getHours() === 12 || s.start.getHours() === 13),
+    ).toBe(false);
+  });
+
+  it("ne génère aucun créneau pour une plage trop courte (amplitude < slotDuration)", () => {
+    const ranges: WorkingHourRange[] = [
+      { startTime: "09:00", endTime: "09:20", slotDuration: 30 },
+    ];
+    expect(generateDaySlots(DAY, ranges)).toHaveLength(0);
+  });
+
+  it("génère 4 créneaux pour 09:00–12:00 en pas de 45 min", () => {
+    // 09:00, 09:45, 10:30, 11:15 → 4 créneaux (12:00 atteint mais 11:15+45=12:00 ok ; 12:00+45 dépasse).
+    const ranges: WorkingHourRange[] = [
+      { startTime: "09:00", endTime: "12:00", slotDuration: 45 },
+    ];
+    const slots = generateDaySlots(DAY, ranges);
+    expect(slots).toHaveLength(4);
+    expect(slots.at(-1)!.start.getHours()).toBe(11);
+    expect(slots.at(-1)!.start.getMinutes()).toBe(15);
+  });
+
+  it("renvoie un tableau vide quand aucune plage n'est fournie (jour fermé)", () => {
+    expect(generateDaySlots(DAY, [])).toHaveLength(0);
   });
 });
 
@@ -61,7 +110,6 @@ describe("isOverlapping", () => {
   });
 
   it("ne détecte pas de chevauchement quand les intervalles se touchent", () => {
-    // Slot 09:00-09:30, RDV 09:30-10:00 → adjacents, pas de chevauchement.
     const slot = new Date("2026-06-01T09:00:00");
     const apt = {
       startTime: new Date("2026-06-01T09:30:00"),
@@ -82,19 +130,18 @@ describe("isOverlapping", () => {
 
 describe("filterAvailableSlots", () => {
   it("ne retire aucun créneau quand il n'y a pas de RDV", () => {
-    const slots = filterAvailableSlots(DAY, [], DEFAULT_HOURS);
-    expect(slots).toHaveLength(20);
+    expect(filterAvailableSlots(DAY, [], FULL_DAY)).toHaveLength(20);
   });
 
-  it("retire le créneau 09:00 quand un RDV CONFIRMED de 30min s'y trouve", () => {
+  it("retire le créneau 09:00 quand un RDV de 30min s'y trouve", () => {
     const apt = {
       startTime: new Date(DAY.getFullYear(), DAY.getMonth(), DAY.getDate(), 9, 0),
       endTime: new Date(DAY.getFullYear(), DAY.getMonth(), DAY.getDate(), 9, 30),
     };
-    const slots = filterAvailableSlots(DAY, [apt], DEFAULT_HOURS);
+    const slots = filterAvailableSlots(DAY, [apt], FULL_DAY);
     expect(slots).toHaveLength(19);
     expect(
-      slots.some((s) => s.getHours() === 9 && s.getMinutes() === 0),
+      slots.some((s) => s.start.getHours() === 9 && s.start.getMinutes() === 0),
     ).toBe(false);
   });
 
@@ -103,17 +150,16 @@ describe("filterAvailableSlots", () => {
       startTime: new Date(DAY.getFullYear(), DAY.getMonth(), DAY.getDate(), 10, 0),
       endTime: new Date(DAY.getFullYear(), DAY.getMonth(), DAY.getDate(), 10, 45),
     };
-    const slots = filterAvailableSlots(DAY, [apt], DEFAULT_HOURS);
+    const slots = filterAvailableSlots(DAY, [apt], FULL_DAY);
     expect(slots).toHaveLength(18);
     expect(
-      slots.some((s) => s.getHours() === 10 && s.getMinutes() === 0),
+      slots.some((s) => s.start.getHours() === 10 && s.start.getMinutes() === 0),
     ).toBe(false);
     expect(
-      slots.some((s) => s.getHours() === 10 && s.getMinutes() === 30),
+      slots.some((s) => s.start.getHours() === 10 && s.start.getMinutes() === 30),
     ).toBe(false);
-    // 11:00 reste disponible.
     expect(
-      slots.some((s) => s.getHours() === 11 && s.getMinutes() === 0),
+      slots.some((s) => s.start.getHours() === 11 && s.start.getMinutes() === 0),
     ).toBe(true);
   });
 });

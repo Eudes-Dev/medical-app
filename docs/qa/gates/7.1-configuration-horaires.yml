@@ -1,0 +1,101 @@
+schema: 1
+story: "7.1"
+story_title: "Configuration des horaires d'ouverture"
+gate: CONCERNS
+status_reason: >-
+  Implémentation conforme aux 10 ACs, 70 tests verts et tsc propre. Les deux findings 7.1
+  (TEST-001 validation cliente, A11Y-001 cible tactile) ont été corrigés. Gate reste CONCERNS
+  uniquement à cause de deux NFR carry-over 4.1/4.2 bloquants pour la prod : TZ serveur sur la
+  génération de créneaux (REL-001) et rate limiter public absent (SEC-001).
+reviewer: "Quinn (Test Architect)"
+updated: "2026-05-27T13:40:00Z"
+expires: "2026-06-10T13:40:00Z"
+
+quality_score: 80
+
+evidence:
+  tests_reviewed: 70
+  risks_identified: 2
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 8, 10]
+    ac_gaps: [7, 9] # États UI & responsive : non couverts par tests automatisés (déféré E2E). A11Y-001 défaut corrigé.
+
+top_issues:
+  - id: "REL-001"
+    severity: medium
+    title: "Génération de créneaux dépendante de la TZ serveur (carry-over 4.1/4.2)"
+    description: >-
+      generateDaySlots (lib/cabinet/slots.ts) utilise setHours en heure locale. Sur un
+      runtime UTC (Vercel) un créneau "10:00" affiché correspondra à 12:00 (été) / 11:00
+      (hiver) heure de Paris. La story 7.1 conserve volontairement ce comportement (pas de
+      régression ni de divergence locale) mais en hérite le défaut. À fixer de façon
+      transverse (date-fns-tz Europe/Paris) avant mise en production.
+    refs:
+      - "lib/cabinet/slots.ts:57"
+    suggested_owner: dev
+  - id: "SEC-001"
+    severity: medium
+    title: "Rate limiter absent sur Server Action publique (carry-over 4.1)"
+    description: >-
+      getAvailableSlots reste une action non authentifiée exposée publiquement ; 7.1 y ajoute
+      une requête workingHours. Le TODO story 13.5 est en place mais non câblé. Risque :
+      scraping de la disponibilité, DoS applicatif. Pré-existant, non régressé.
+    refs:
+      - "app/(public)/[cabinet-slug]/book/actions.ts:75"
+    suggested_owner: dev
+
+resolved_issues:
+  - id: "TEST-001"
+    title: "Validation cliente validateDay non testée unitairement"
+    resolution: >-
+      Ajout de tests/unit/components/settings/schedule-model.test.ts (13 tests) verrouillant la
+      parité validateDay/hasDayErrors avec le Zod serveur : format, fin>début, amplitude,
+      chevauchement (y compris plages inactives) et adjacence.
+    refs:
+      - "tests/unit/components/settings/schedule-model.test.ts"
+  - id: "A11Y-001"
+    title: "Cible tactile du Switch sous le seuil AC 9 / WCAG 2.5.8"
+    resolution: >-
+      components/ui/switch.tsx étend la zone tactile à 44x44px via un pseudo-élément
+      transparent centré (before:size-11) tout en conservant la piste visuelle compacte.
+    refs:
+      - "components/ui/switch.tsx:19"
+
+waiver:
+  active: false
+
+nfr_validation:
+  security:
+    status: CONCERNS
+    notes: >-
+      requireUser sur getWorkingHours et saveWorkingHours (testé), erreurs génériques sans
+      fuite, pas d'enjeu RGPD (donnée de config). Rate limiter public manquant (SEC-001).
+  performance:
+    status: PASS
+    notes: >-
+      Index @@index([dayOfWeek]), select restreints, fenêtres bornées. Mineur :
+      resolveSlotDuration ajoute 1 requête par réservation invité (négligeable).
+  reliability:
+    status: CONCERNS
+    notes: >-
+      Remplacement transactionnel (dernière sauvegarde gagne), catch DB + message générique,
+      court-circuit jour fermé. Risque TZ serveur sur la génération (REL-001).
+  maintainability:
+    status: PASS
+    notes: >-
+      Helpers purs isolés et testés, générateur découplé de Prisma, JSDoc dense, double
+      validation cohérente désormais couverte par test. Point d'extension propre pour 7.2.
+
+recommendations:
+  immediate: # À traiter avant mise en production
+    - action: "Forcer Europe/Paris à la génération des créneaux (date-fns-tz) — transverse 4.1/4.2/7.1"
+      refs: ["lib/cabinet/slots.ts"]
+    - action: "Brancher le rate limiter (story 13.5) sur getAvailableSlots"
+      refs: ["app/(public)/[cabinet-slug]/book/actions.ts"]
+    - action: "Appliquer la migration en prod (prisma migrate deploy) + seed si table vide"
+      refs: ["prisma/migrations/20260526000003_add_working_hours/migration.sql", "scripts/seed-working-hours.ts"]
+  future: # Peut être traité plus tard
+    - action: "Test E2E Playwright édition horaires -> créneaux /book + audit a11y/responsive (couvre AC 7 & 9)"
+      refs: ["tests/e2e/"]
+    - action: "Envelopper loading.tsx du shell sidebar pour éviter le scintillement de navigation"
+      refs: ["app/dashboard/settings/schedule/loading.tsx"]

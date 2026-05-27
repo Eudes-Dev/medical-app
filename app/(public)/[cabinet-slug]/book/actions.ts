@@ -16,8 +16,9 @@
 import { addDays, addMinutes, startOfDay, startOfToday, endOfDay } from "date-fns";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { CABINET_INFO, CABINET_DEFAULT_SLUG } from "@/lib/cabinet/config";
+import { CABINET_DEFAULT_SLUG } from "@/lib/cabinet/config";
 import { filterAvailableSlots, isOverlapping } from "@/lib/cabinet/slots";
+import { toMinutes, type WorkingHourRange } from "@/lib/cabinet/working-hours";
 import {
   guestBookingSchema,
   type GuestBookingValues,
@@ -51,7 +52,12 @@ export type GetAvailableSlotsResult =
 /**
  * Retourne la liste des créneaux disponibles pour une date donnée.
  *
- * Un créneau est considéré occupé si son intervalle `[slot, slot+30min)`
+ * Les plages travaillées sont lues en base (`WorkingHours`) à **chaque appel**
+ * (pas de cache à invalider, story 7.1) selon le jour de la semaine de `date`.
+ * Si aucune plage active n'est définie ce jour-là, la journée est fermée
+ * (`{ slots: [] }`).
+ *
+ * Un créneau est considéré occupé si son intervalle `[slot, slot+slotDuration)`
  * chevauche un `Appointment` existant dont `status != CANCELLED`.
  */
 // PUBLIC: pas d'auth requise — réservation invité (story 4.1).
@@ -70,8 +76,19 @@ export async function getAvailableSlots(
   // Pour l'instant: fallback no-op — à tracer dans le backlog.
 
   const { date } = parsed.data;
+  // 0=Dimanche … 6=Samedi — convention alignée avec WorkingHours.dayOfWeek.
+  const dayOfWeek = date.getDay();
 
   try {
+    // Plages travaillées du jour (story 7.1). Aucune plage active ⇒ jour fermé.
+    const ranges: WorkingHourRange[] = await prisma.workingHours.findMany({
+      where: { dayOfWeek, active: true },
+      select: { startTime: true, endTime: true, slotDuration: true },
+    });
+    if (ranges.length === 0) {
+      return { slots: [] };
+    }
+
     const appointments = await prisma.appointment.findMany({
       where: {
         startTime: { gte: startOfDay(date), lt: endOfDay(date) },
@@ -80,13 +97,9 @@ export async function getAvailableSlots(
       select: { startTime: true, endTime: true },
     });
 
-    const slots = filterAvailableSlots(
-      date,
-      appointments,
-      CABINET_INFO.openingHours,
-    );
+    const slots = filterAvailableSlots(date, appointments, ranges);
 
-    return { slots: slots.map((s) => s.toISOString()) };
+    return { slots: slots.map((s) => s.start.toISOString()) };
   } catch (err) {
     console.error("[getAvailableSlots] DB error:", err);
     return {
@@ -133,6 +146,27 @@ async function findOrCreatePatient(
   });
 }
 
+/** Durée par défaut d'un créneau si aucune plage horaire ne le couvre (minutes). */
+const FALLBACK_SLOT_MINUTES = 30;
+
+/**
+ * Détermine la durée (minutes) du créneau choisi en lisant la plage
+ * `WorkingHours` du jour qui le contient (story 7.1). Fallback à
+ * {@link FALLBACK_SLOT_MINUTES} si aucune plage active ne couvre l'instant
+ * (incohérence entre l'horaire affiché et la soumission).
+ */
+async function resolveSlotDuration(slot: Date): Promise<number> {
+  const ranges = await prisma.workingHours.findMany({
+    where: { dayOfWeek: slot.getDay(), active: true },
+    select: { startTime: true, endTime: true, slotDuration: true },
+  });
+  const slotMin = slot.getHours() * 60 + slot.getMinutes();
+  const containing = ranges.find(
+    (r) => slotMin >= toMinutes(r.startTime) && slotMin < toMinutes(r.endTime),
+  );
+  return containing?.slotDuration ?? FALLBACK_SLOT_MINUTES;
+}
+
 /**
  * Crée un rendez-vous "invité".
  *
@@ -165,10 +199,14 @@ export async function createGuestBooking(
 
   const data = parsed.data;
   const slot = new Date(data.slotISO);
-  const { slotMinutes } = CABINET_INFO.openingHours;
-  const endTime = addMinutes(slot, slotMinutes);
 
   try {
+    // Durée du créneau = slotDuration de la plage (WorkingHours) qui contient
+    // l'instant choisi (story 7.1). Fallback 30 min si aucune plage ne le
+    // couvre (incohérence horaires/créneau soumis) afin de ne pas bloquer.
+    const slotMinutes = await resolveSlotDuration(slot);
+    const endTime = addMinutes(slot, slotMinutes);
+
     // 3. Anti-collision — on relit les RDV du jour et on applique `isOverlapping`.
     const sameDayAppointments = await prisma.appointment.findMany({
       where: {

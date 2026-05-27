@@ -223,6 +223,36 @@ model Appointment {
   @@map("appointments")
 }
 
+/// Horaires d'ouverture hebdomadaires du cabinet (story 7.1).
+///
+/// Single-tenant : un seul jeu d'horaires pour l'unique cabinet (pas de
+/// `userId`/`tenantId`). Plusieurs lignes pour un même `dayOfWeek` = plusieurs
+/// plages dans la journée (ex. matin + après-midi avec pause déjeuner).
+///
+/// La structure reste compatible avec une extension multi-praticien future
+/// (story 18.1) où une colonne de scoping serait ajoutée.
+model WorkingHours {
+  /// Identifiant unique UUID généré automatiquement
+  id           String   @id @default(uuid())
+  /// Jour de la semaine : 0=Dimanche … 6=Samedi (convention JS `Date.getDay()`).
+  dayOfWeek    Int      @map("day_of_week")
+  /// Heure de début "HH:mm" (24h).
+  startTime    String   @map("start_time")
+  /// Heure de fin "HH:mm" (24h, exclusive).
+  endTime      String   @map("end_time")
+  /// Durée d'un créneau en minutes : 15 | 30 | 45 | 60.
+  slotDuration Int      @default(30) @map("slot_duration")
+  /// Plage active (false = désactivée sans suppression).
+  active       Boolean  @default(true)
+  /// Date de création de la plage
+  createdAt    DateTime @default(now()) @map("created_at")
+  /// Date de dernière modification
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([dayOfWeek])
+  @@map("working_hours")
+}
+
 /// Journal des messages transactionnels envoyés (story 6.1, renommé/étendu en 6.3).
 ///
 /// Permet de tracer les succès et échecs d'envoi (email + SMS) sans bloquer le flux principal.

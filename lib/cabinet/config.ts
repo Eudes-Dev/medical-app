@@ -25,6 +25,13 @@ export interface CabinetInfo {
   address: string;
   phone: string;
   openingHoursLabel: string;
+  /**
+   * @deprecated Depuis la story 7.1, les créneaux du tunnel public ne sont
+   * plus générés à partir de cette constante mais du modèle persistant
+   * `WorkingHours` (voir `lib/cabinet/slots.ts` + `app/(public)/.../book/actions.ts`).
+   * Conservée temporairement : n'a plus d'effet sur la génération de créneaux.
+   * À retirer une fois le label public dérivé de `WorkingHours` (hand-off 7.4).
+   */
   openingHours: OpeningHours;
 }
 
@@ -33,6 +40,8 @@ export const CABINET_INFO: CabinetInfo = {
   address: "12 rue de la Santé, 75014 Paris",
   phone: "01 23 45 67 89",
   openingHoursLabel: "Lundi au vendredi, 8h00 – 18h00",
+  // @deprecated (story 7.1) — n'est plus la source des créneaux ; conservé
+  // pour le label statique de la landing en attendant la story 7.4.
   openingHours: {
     start: 8,
     end: 18,
