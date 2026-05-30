@@ -33,6 +33,7 @@ import {
 import {
   CalendarGrid,
   getSlotStartTime,
+  type CalendarTimeOff,
 } from "@/components/calendar/CalendarGrid";
 import { CalendarSkeleton } from "@/components/calendar/CalendarSkeleton";
 import { CalendarHeader } from "@/components/calendar/CalendarHeader";
@@ -43,6 +44,7 @@ import { AppointmentCard } from "@/components/calendar/AppointmentCard";
 import { CreateAppointmentModal } from "@/components/calendar/CreateAppointmentModal";
 import { AppointmentDetailsModal } from "@/components/calendar/AppointmentDetailsModal";
 import { getAppointmentsByDateRange } from "@/app/dashboard/calendar/actions";
+import { getTimeOffsByDateRange } from "@/app/dashboard/settings/timeoff/actions";
 import {
   useCalendarStore,
   getCacheKeyForView,
@@ -97,6 +99,10 @@ export default function CalendarPage() {
   const setAppointments = useCalendarStore((s) => s.setAppointments);
 
   const [loading, setLoading] = useState(false);
+  /** Exceptions actives (story 7.2) sur la plage affichée. Hors du store
+   * `useCalendarStore` car non couvertes par son cache existant ; rafraîchies
+   * en parallèle des RDV pour rester synchronisées avec la navigation. */
+  const [timeOffs, setTimeOffs] = useState<CalendarTimeOff[]>([]);
   /** RDV sélectionné: ouvre le modal de détails (Story 3.3) */
   const [selectedAppointment, setSelectedAppointment] =
     useState<AppointmentWithPatient | null>(null);
@@ -116,12 +122,12 @@ export default function CalendarPage() {
     setLoading(true);
     try {
       const { startDate, endDate } = getDateRange(pivotDate, viewMode);
-      const list = await getAppointmentsByDateRange(
-        startDate,
-        endDate,
-        showCancelled
-      );
+      const [list, offs] = await Promise.all([
+        getAppointmentsByDateRange(startDate, endDate, showCancelled),
+        getTimeOffsByDateRange(startDate, endDate),
+      ]);
       setAppointments(cacheKey, list);
+      setTimeOffs(offs);
     } finally {
       setLoading(false);
     }
@@ -250,6 +256,7 @@ export default function CalendarPage() {
                 dayContent={dayContent}
                 dayCounts={dayCounts}
                 onSlotClick={handleSlotClick}
+                timeOffs={timeOffs}
               />
             )}
           </div>

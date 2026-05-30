@@ -27,6 +27,10 @@ const FR_PHONE_REGEX = /^(?:\+33[\s.-]?|0)[1-9](?:[\s.-]?\d{2}){4}$/;
  * - `phone`        : format FR (10 chiffres ou +33)
  * - `email`        : adresse valide, normalisée en lowercase
  * - `slotISO`      : ISO 8601 avec offset, strictement dans le futur
+ * - `serviceTypeId`: UUID du type de soin choisi (story 7.3). **Optionnel** :
+ *   absent ⇒ repli « Consultation » quand aucun service public n'est configuré
+ *   (cf. Dev Notes « Repli tunnel »). Quand présent, le serveur revalide que le
+ *   service est bien `active && isPublic` (défense en profondeur, AC 9).
  */
 export const guestBookingSchema = z.object({
   firstName: z
@@ -50,6 +54,7 @@ export const guestBookingSchema = z.object({
     .refine((s) => new Date(s) > new Date(), {
       message: "Le créneau doit être dans le futur",
     }),
+  serviceTypeId: z.string().uuid("Type de soin invalide").optional(),
 });
 
 export type GuestBookingValues = z.infer<typeof guestBookingSchema>;

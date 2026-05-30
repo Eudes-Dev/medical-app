@@ -1,0 +1,31 @@
+schema: 1
+story: "1.1"
+story_title: "Initialisation Next.js 16"
+gate: PASS
+status_reason: >-
+  Story de scaffolding : Next.js 16.1.4 + App Router, TypeScript strict, TailwindCSS v4, Shadcn UI
+  (Button/Input/Card), structure single-tenant (/dashboard privé, /book public), build prod réussi.
+  Tous les 7 ACs satisfaits. Pas de tests automatisés attendus à ce stade (vérification build/démarrage).
+reviewer: "Sarah (PO) — gate rétro-créée"
+updated: "2026-05-30T00:00:00Z"
+expires: "2026-06-30T00:00:00Z"
+
+quality_score: 95
+
+evidence:
+  tests_reviewed: 0
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7]
+    ac_gaps: []
+
+top_issues: []
+
+waiver:
+  active: false
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Note : la structure /book a été remplacée par le route group (public)/[cabinet-slug] en 4.1"
+      refs: ["app/(public)/"]

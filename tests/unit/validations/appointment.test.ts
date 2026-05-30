@@ -100,14 +100,40 @@ describe("appointmentSchema (Story 3.3)", () => {
     }
   });
 
-  it("3.3-UNIT-002: rejette un type inconnu", () => {
+  // Story 7.3 : `type` n'est plus une enum statique mais un libellé-instantané
+  // (snapshot) libre — le catalogue dynamique `ServiceType` (FK `serviceTypeId`)
+  // remplace l'enum. Un libellé personnalisé est donc désormais accepté.
+  it("3.3-UNIT-002 / 7.3: accepte un libellé de type personnalisé (snapshot)", () => {
     const result = appointmentSchema.safeParse({
       ...validValues(),
-      type: "Inconnu" as never,
+      type: "Téléconsultation",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("3.3-UNIT-002 / 7.3: rejette un type vide (chaîne après trim)", () => {
+    const result = appointmentSchema.safeParse({ ...validValues(), type: "  " });
+    expect(result.success).toBe(false);
+  });
+
+  it("7.3: accepte un serviceTypeId UUID valide", () => {
+    const result = appointmentSchema.safeParse({
+      ...validValues(),
+      serviceTypeId: "77777777-7777-4777-8777-777777777777",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("7.3: rejette un serviceTypeId non-UUID", () => {
+    const result = appointmentSchema.safeParse({
+      ...validValues(),
+      serviceTypeId: "not-a-uuid",
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      const issue = result.error.issues.find((i) => i.path.includes("type"));
+      const issue = result.error.issues.find((i) =>
+        i.path.includes("serviceTypeId")
+      );
       expect(issue).toBeDefined();
     }
   });

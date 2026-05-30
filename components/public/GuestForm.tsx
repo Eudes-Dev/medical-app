@@ -33,6 +33,7 @@ export function GuestForm({ slotISO, cabinetSlug }: GuestFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const setLastAppointmentId = useBookingStore((s) => s.setLastAppointmentId);
+  const selectedServiceTypeId = useBookingStore((s) => s.selectedServiceTypeId);
   const reset = useBookingStore((s) => s.reset);
 
   const {
@@ -57,7 +58,12 @@ export function GuestForm({ slotISO, cabinetSlug }: GuestFormProps) {
 
   const onSubmit = (vals: GuestBookingValues) => {
     startTransition(async () => {
-      const result = await createGuestBooking({ ...vals, slotISO });
+      const result = await createGuestBooking({
+        ...vals,
+        slotISO,
+        // Motif choisi à l'étape 1 (story 7.3) ; `undefined` ⇒ repli serveur.
+        serviceTypeId: selectedServiceTypeId ?? undefined,
+      });
 
       if ("success" in result) {
         setLastAppointmentId(result.appointmentId);
@@ -75,6 +81,12 @@ export function GuestForm({ slotISO, cabinetSlug }: GuestFormProps) {
 
       if (result.error === "VALIDATION") {
         showError(TOAST_MESSAGES.errors.validation);
+        return;
+      }
+
+      if (result.error === "RATE_LIMITED") {
+        // Story 5.3 (SEC-001) : message neutre, pas de fuite.
+        showError(TOAST_MESSAGES.errors.rateLimited);
         return;
       }
 

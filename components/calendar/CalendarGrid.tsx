@@ -31,7 +31,19 @@ import { fr } from "date-fns/locale";
 import { Coffee } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import {
+  dayKey as toDayKey,
+  type TimeOffInterval,
+} from "@/lib/cabinet/time-off";
+import { toMinutes } from "@/lib/cabinet/working-hours";
 import type { ViewMode } from "@/stores/useCalendarStore";
+
+/** Exception d'agenda à matérialiser sur la grille (story 7.2). */
+export interface CalendarTimeOff extends TimeOffInterval {
+  id: string;
+  reason: string | null;
+  source: "MANUAL" | "HOLIDAY";
+}
 
 /** Heure de début de la grille (inclus) */
 const HOUR_START = 8;
@@ -71,6 +83,13 @@ export interface CalendarGridProps {
   dayCounts?: Record<string, number>;
   /** Clic sur un créneau vide: (date du jour, index du créneau 0..23). Story 3.3: ouvre la modal de création de RDV. */
   onSlotClick?: (date: Date, slotIndex: number) => void;
+  /**
+   * Exceptions d'agenda actives (story 7.2). Rendues en overlay informatif :
+   * - `allDay` → bandeau plein sur toute la colonne du jour ;
+   * - plage intra-journée → bandeau positionné sur la plage horaire concernée.
+   * Le praticien reste autorisé à créer un RDV (overlay non-bloquant).
+   */
+  timeOffs?: CalendarTimeOff[];
 }
 
 /** Export pour la page: nombre de créneaux (30 min) entre 8h et 20h */
@@ -211,12 +230,62 @@ function WeekendEmptyState() {
   );
 }
 
+/**
+ * Calcule les overlays d'exceptions pour un jour donné. Chaque overlay porte
+ * une position verticale en pixels (relative à la zone des créneaux 8h–20h)
+ * et un libellé court à afficher.
+ */
+function getTimeOffOverlays(
+  date: Date,
+  timeOffs: CalendarTimeOff[],
+): { id: string; top: number; height: number; label: string; source: "MANUAL" | "HOLIDAY"; allDay: boolean }[] {
+  const overlays: ReturnType<typeof getTimeOffOverlays> = [];
+  const dKey = toDayKey(date);
+  const gridMinutes = (HOUR_END - HOUR_START) * 60;
+  const gridHeight = SLOT_COUNT * SLOT_HEIGHT_PX;
+
+  for (const t of timeOffs) {
+    const covers =
+      toDayKey(t.startDate) <= dKey && dKey <= toDayKey(t.endDate);
+    if (!covers) continue;
+
+    const label =
+      t.reason ?? (t.source === "HOLIDAY" ? "Jour férié" : "Congé");
+
+    if (t.allDay) {
+      overlays.push({
+        id: t.id,
+        top: 0,
+        height: gridHeight,
+        label,
+        source: t.source,
+        allDay: true,
+      });
+      continue;
+    }
+    if (!t.startTime || !t.endTime) continue;
+    const startMin = Math.max(toMinutes(t.startTime) - HOUR_START * 60, 0);
+    const endMin = Math.min(toMinutes(t.endTime) - HOUR_START * 60, gridMinutes);
+    if (endMin <= 0 || startMin >= gridMinutes || endMin <= startMin) continue;
+    overlays.push({
+      id: t.id,
+      top: (startMin / 30) * SLOT_HEIGHT_PX,
+      height: ((endMin - startMin) / 30) * SLOT_HEIGHT_PX,
+      label,
+      source: t.source,
+      allDay: false,
+    });
+  }
+  return overlays;
+}
+
 export function CalendarGrid({
   pivotDate,
   viewMode,
   dayContent = {},
   dayCounts = {},
   onSlotClick,
+  timeOffs = [],
 }: CalendarGridProps) {
   const dates = getDisplayDates(pivotDate, viewMode);
 
@@ -359,6 +428,28 @@ export function CalendarGrid({
 
                 {/* État vide week-end (au-dessus des slots, sans intercepter les clics) */}
                 {showWeekendEmpty && <WeekendEmptyState />}
+
+                {/* Overlays « Congé / Férié » (story 7.2, AC 3 — informatif, non bloquant).
+                    `pointer-events-none` : le praticien reste autorisé à cliquer
+                    le créneau sous-jacent pour créer un RDV malgré l'exception. */}
+                {getTimeOffOverlays(date, timeOffs).map((o) => (
+                  <div
+                    key={o.id}
+                    className={cn(
+                      "pointer-events-none absolute left-0 right-0 z-[15] flex items-start justify-end gap-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide",
+                      // Hachure diagonale + couleur selon source.
+                      o.source === "HOLIDAY"
+                        ? "bg-[repeating-linear-gradient(45deg,rgba(245,158,11,0.18)_0,rgba(245,158,11,0.18)_6px,transparent_6px,transparent_12px)] text-amber-700"
+                        : "bg-[repeating-linear-gradient(45deg,rgba(244,63,94,0.18)_0,rgba(244,63,94,0.18)_6px,transparent_6px,transparent_12px)] text-rose-700",
+                    )}
+                    style={{ top: o.top, height: o.height }}
+                    aria-label={`${o.source === "HOLIDAY" ? "Jour férié" : "Congé"} : ${o.label}`}
+                  >
+                    <span className="rounded bg-white/80 px-1 shadow-sm">
+                      {o.label}
+                    </span>
+                  </div>
+                ))}
 
                 {/* Contenu du jour (AppointmentCard rendus par le parent) */}
                 <div className="absolute inset-0 z-10 px-1 pt-0.5">{content}</div>

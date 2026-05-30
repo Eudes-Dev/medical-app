@@ -25,6 +25,19 @@ Ces éléments dépendent d'infrastructure externe (Postgres, projet Supabase, b
 - **Avant 13.1** : les AC d'ergonomie / persistance des stories 3.1, 3.2, 3.3 restent validés uniquement par revue manuelle sur la machine de dev. Risque de régression silencieuse entre deux livraisons calendrier.
 - **Après 13.1 sans CI activée** : la dette technique 3.6 demeure ouverte malgré la disponibilité du job.
 
+## Journal d'exécution
+
+### 2026-05-30 — Tentative (story 5.3, Task 6 / AC 14)
+- **Commande** : `npm run test:e2e`.
+- **Résultat** : **bloqué au `global-setup`**, avant tout scénario, par un prérequis d'environnement (pas une régression de code) :
+  ```
+  Error: DATABASE_URL_TEST manquante (cf. .env.test.example).
+    at tests/e2e/global-setup.ts:22
+  ```
+- **Cause** : `.env.test` **absent** de la sandbox de dev ; la base Supabase de dev est par ailleurs injoignable (`P1001`). Les trois prérequis ci-dessus (base Postgres `medical_app_test` isolée, projet Supabase de test, binaires Playwright) ne sont pas réunis dans cet environnement.
+- **Conséquence** : aucun scénario n'a pu s'exécuter ; **aucun scénario rouge** à tracer (l'arrêt est antérieur au lancement des tests). La validation reste à faire par un runner disposant de l'infra de test, ou via le job CI de la story 13.1.
+- **Conforme** au mode différé acté (AC7 story 3.6) et à AC 11/14 de la story 5.3 (aucune action sur une base live depuis la story de dev).
+
 ## Références
 - [Story 3.6](../stories/3.6.dette-runner-e2e-calendrier.story.md)
 - [tests/e2e/README.md](../../tests/e2e/README.md)

@@ -14,8 +14,15 @@
 
 import { addMinutes } from "date-fns";
 import { toMinutes, type WorkingHourRange } from "@/lib/cabinet/working-hours";
+import { slotInstant } from "@/lib/cabinet/timezone";
+import {
+  isDayFullyBlocked,
+  slotInPartialTimeOff,
+  type TimeOffInterval,
+} from "@/lib/cabinet/time-off";
 
 export type { WorkingHourRange } from "@/lib/cabinet/working-hours";
+export type { TimeOffInterval } from "@/lib/cabinet/time-off";
 
 /** Intervalle d'un rendez-vous existant utilisé pour le filtrage. */
 export interface AppointmentInterval {
@@ -31,8 +38,9 @@ export interface GeneratedSlot {
 
 /**
  * Génère tous les créneaux possibles d'une journée à partir d'une liste de
- * plages horaires. La date passée détermine le **jour** ; les heures de chaque
- * créneau sont posées via `setHours` (cf. note Fuseau horaire dans la story 7.1).
+ * plages horaires. La date passée détermine le **jour** ; chaque créneau est
+ * posé à son heure murale **`Europe/Paris`** via {@link slotInstant} (story 5.3,
+ * REL-001), indépendamment du fuseau du serveur (CET/CEST gérés automatiquement).
  *
  * La condition `m + slotDuration <= endM` garantit qu'aucun créneau ne dépasse
  * la fin de la plage : une plage 08:00–18:00 / 30 min produit exactement 20
@@ -51,10 +59,9 @@ export function generateDaySlots(
     const startM = toMinutes(r.startTime);
     const endM = toMinutes(r.endTime);
     for (let m = startM; m + r.slotDuration <= endM; m += r.slotDuration) {
-      const start = new Date(date);
-      // NB: setHours s'appuie sur le fuseau local du serveur — héritage TZ
-      // 4.1/4.2 (REL-001), corrigé de façon transverse avant mise en prod.
-      start.setHours(Math.floor(m / 60), m % 60, 0, 0);
+      // Instant UTC de l'heure murale `m` (minutes depuis minuit) en heure de
+      // Paris pour le jour de `date` — corrige REL-001 (story 5.3).
+      const start = slotInstant(date, m);
       slots.push({ start, slotMinutes: r.slotDuration });
     }
   }
@@ -75,18 +82,25 @@ export function isOverlapping(
 }
 
 /**
- * Filtre les créneaux d'une journée pour ne conserver que ceux qui ne
- * chevauchent aucun rendez-vous existant.
+ * Filtre les créneaux d'une journée en retirant ceux qui chevauchent un
+ * rendez-vous existant ou une exception `TimeOff` active (story 7.2).
  *
- * Point d'extension de la story 7.2 : les exceptions `TimeOff` (congés/fériés)
- * viendront retrancher des créneaux par-dessus la sortie de `generateDaySlots`.
+ * Le paramètre `timeOffs` est **optionnel** (défaut `[]`) afin de préserver la
+ * compatibilité avec les appels 7.1 à 3 arguments (AC 10, non-régression) :
+ * - Une exception `allDay` couvrant `date` court-circuite à `[]`.
+ * - Une exception partielle (intra-journée) retire les créneaux qui la
+ *   chevauchent.
  */
 export function filterAvailableSlots(
   date: Date,
   appointments: AppointmentInterval[],
   ranges: WorkingHourRange[],
+  timeOffs: TimeOffInterval[] = [],
 ): GeneratedSlot[] {
+  if (isDayFullyBlocked(date, timeOffs)) return [];
   return generateDaySlots(date, ranges).filter(
-    (s) => !appointments.some((apt) => isOverlapping(s.start, s.slotMinutes, apt)),
+    (s) =>
+      !appointments.some((apt) => isOverlapping(s.start, s.slotMinutes, apt)) &&
+      !slotInPartialTimeOff(s.start, s.slotMinutes, timeOffs),
   );
 }

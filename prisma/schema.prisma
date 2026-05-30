@@ -76,6 +76,14 @@ enum MessageStatus {
   FAILED
 }
 
+/// Source d'une exception d'agenda (story 7.2).
+enum TimeOffSource {
+  /// Saisie manuelle du praticien (congé, formation…).
+  MANUAL
+  /// Jour férié français matérialisé automatiquement (désactivable).
+  HOLIDAY
+}
+
 // ==============================================
 // MODÈLES
 // ==============================================
@@ -195,8 +203,12 @@ model Appointment {
   endTime   DateTime          @map("end_time")
   /// Statut actuel du rendez-vous
   status    AppointmentStatus @default(PENDING)
-  /// Type de consultation (ex: "Première consultation", "Suivi", "Urgence")
+  /// Type de consultation, CONSERVÉ comme libellé-instantané (snapshot) — story 7.3.
+  /// Historise l'intitulé du soin au moment de la réservation et assure la
+  /// rétro-compatibilité des emails (6.1/6.3). NE PAS supprimer.
   type      String
+  /// FK optionnelle vers le type de soin (story 7.3). Null pour les RDV legacy.
+  serviceTypeId String?      @map("service_type_id")
   /// Notes sur le rendez-vous (optionnel)
   notes             String?
   /// Token UUID d'annulation (généré pour les RDV via tunnel public, null pour les RDV dashboard)
@@ -213,6 +225,9 @@ model Appointment {
   /// Relation vers le Patient propriétaire du rendez-vous
   /// onDelete Cascade: Suppression du patient → suppression de ses RDV
   patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  /// Type de soin rattaché (story 7.3). `onDelete: SetNull` détache le RDV sans
+  /// le casser si le service est supprimé ; le snapshot `type` reste intact.
+  serviceType ServiceType? @relation(fields: [serviceTypeId], references: [id], onDelete: SetNull)
   /// Logs des messages (email + SMS) envoyés pour ce rendez-vous (story 6.1, étendu en 6.3)
   messageLogs MessageLog[]
 
@@ -220,7 +235,40 @@ model Appointment {
   @@index([patientId])
   /// Index sur startTime pour optimiser les requêtes de calendrier
   @@index([startTime])
+  /// Index sur serviceTypeId pour le comptage des RDV rattachés (suppression protégée 7.3)
+  @@index([serviceTypeId])
   @@map("appointments")
+}
+
+/// Catalogue paramétrable des types de soins / motifs de consultation (story 7.3).
+///
+/// Single-tenant : un seul catalogue pour l'unique cabinet (pas de `userId`/
+/// `tenantId`). La structure reste compatible avec une extension multi-praticien
+/// future (story 18.1) par ajout d'une colonne de scoping.
+model ServiceType {
+  id          String   @id @default(uuid())
+  /// Libellé affiché (dashboard + tunnel public). 2–60 car.
+  label       String
+  /// Durée en minutes (détermine `Appointment.endTime`). ∈ {15,30,45,60,90}.
+  durationMin Int      @map("duration_min")
+  /// Jeton de couleur (palette restreinte de 8 — voir lib/cabinet/service-colors.ts).
+  color       String
+  /// Tarif optionnel en euros (affiché côté patient si renseigné).
+  price       Decimal? @db.Decimal(10, 2)
+  /// Description publique optionnelle (≤ 500 car.), visible dans le tunnel.
+  description String?
+  /// Visible dans le tunnel public `/book` (true) ou réservé au dashboard (false).
+  isPublic    Boolean  @default(false) @map("is_public")
+  /// Type utilisable (false = archivé sans suppression — même sémantique que 7.1/7.2).
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  /// RDV rattachés (relation inverse ; onDelete SetNull côté Appointment).
+  appointments Appointment[]
+
+  @@index([active, isPublic])
+  @@map("service_types")
 }
 
 /// Horaires d'ouverture hebdomadaires du cabinet (story 7.1).
@@ -251,6 +299,44 @@ model WorkingHours {
 
   @@index([dayOfWeek])
   @@map("working_hours")
+}
+
+/// Exceptions d'agenda du cabinet (story 7.2) : congés, absences, jours fériés.
+///
+/// Se superposent aux `WorkingHours` (7.1) pour retrancher des créneaux dans le
+/// tunnel public. Single-tenant : pas de `userId`/`tenantId`.
+///
+/// Deux natures supportées :
+/// - `allDay=true` (par défaut) : une ou plusieurs journées entières bloquées
+///   (`startDate → endDate` inclusives, `endDate >= startDate`).
+/// - `allDay=false` : plage intra-journée sur un jour unique
+///   (`startDate == endDate`, `startTime`/`endTime` "HH:mm" requis).
+model TimeOff {
+  /// Identifiant unique UUID généré automatiquement
+  id        String        @id @default(uuid())
+  /// Premier jour bloqué (inclus). Type `Date` (pas de composante horaire) pour
+  /// éviter toute ambiguïté de fuseau au stockage — comparaison calendaire.
+  startDate DateTime      @db.Date @map("start_date")
+  /// Dernier jour bloqué (inclus). `endDate >= startDate`. Pour une plage
+  /// intra-journée, `endDate == startDate`.
+  endDate   DateTime      @db.Date @map("end_date")
+  /// true = journée(s) entière(s) bloquée(s) ; false = plage intra-journée.
+  allDay    Boolean       @default(true) @map("all_day")
+  /// Heure de début "HH:mm" si plage intra-journée (sinon null).
+  startTime String?       @map("start_time")
+  /// Heure de fin "HH:mm" (exclusive) si plage intra-journée (sinon null).
+  endTime   String?       @map("end_time")
+  /// Motif optionnel (≤ 200 car.) : "Congés", "Formation", libellé du férié…
+  reason    String?
+  /// Origine de l'exception.
+  source    TimeOffSource @default(MANUAL)
+  /// Exception active (false = désactivée sans suppression — fériés notamment).
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  @@index([startDate, endDate])
+  @@map("time_off")
 }
 
 /// Journal des messages transactionnels envoyés (story 6.1, renommé/étendu en 6.3).

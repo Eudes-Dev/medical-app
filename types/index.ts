@@ -187,8 +187,15 @@ export interface Appointment {
   endTime: Date;
   /** Statut du rendez-vous */
   status: AppointmentStatus;
-  /** Type de consultation (ex: "Première consultation", "Suivi", "Urgence") */
+  /** Type de consultation — libellé-instantané (snapshot), story 7.3 */
   type: string;
+  /** FK vers le type de soin rattaché (story 7.3) ; null pour les RDV legacy. */
+  serviceTypeId?: string | null;
+  /**
+   * Jeton de couleur du service rattaché (story 7.3), résolu côté serveur pour
+   * l'accent secondaire de la carte calendrier. Null si aucun service.
+   */
+  serviceColor?: string | null;
   /** Notes sur le rendez-vous (optionnelles) */
   notes?: string;
   /** Date de création */

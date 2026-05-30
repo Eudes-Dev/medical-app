@@ -1,0 +1,40 @@
+schema: 1
+story: "1.2"
+story_title: "Couche de données (Prisma & Supabase)"
+gate: PASS
+status_reason: >-
+  Prisma + Supabase PostgreSQL configurés (DATABASE_URL + DIRECT_URL), modèles User/Patient/
+  Appointment + enum AppointmentStatus, migration init appliquée, client généré, types TS
+  synchronisés, relation Patient(1)-(N)Appointment avec CASCADE, index sur patient_id et start_time.
+  8 ACs satisfaits.
+reviewer: "Sarah (PO) — gate rétro-créée"
+updated: "2026-05-30T00:00:00Z"
+expires: "2026-06-30T00:00:00Z"
+
+quality_score: 90
+
+evidence:
+  tests_reviewed: 0
+  risks_identified: 1
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+
+top_issues:
+  - id: "OPS-001"
+    severity: low
+    title: "Flux de migration à surveiller (db push utilisé dans les stories ultérieures)"
+    description: >-
+      La migration init est propre (migrate dev). Les stories 6.x/7.x ultérieures ont utilisé
+      db push + migrate resolve --applied : cohérence schéma↔migrations à vérifier (story 5.3 OPS-001).
+    refs: ["prisma/migrations/"]
+    suggested_owner: dev
+
+waiver:
+  active: false
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Vérifier prisma migrate status (story 5.3)"
+      refs: ["prisma/migrations/"]

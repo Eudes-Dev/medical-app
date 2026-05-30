@@ -23,11 +23,28 @@ export const TOAST_MESSAGES = {
   schedule: {
     saved: "Horaires enregistrés.",
   },
+  timeOff: {
+    created: "Exception ajoutée.",
+    deleted: "Exception supprimée.",
+    holidayEnabled: "Jour férié activé.",
+    holidayDisabled: "Jour férié désactivé.",
+    cancellationsSent: "Patients prévenus par email.",
+  },
+  serviceType: {
+    created: "Type de soin créé.",
+    updated: "Type de soin mis à jour.",
+    deleted: "Type de soin supprimé.",
+    archived: "Type de soin archivé.",
+    restored: "Type de soin réactivé.",
+    hasAppointments:
+      "Ce type de soin est utilisé par des rendez-vous : archivez-le plutôt que de le supprimer.",
+  },
   errors: {
     validation: "Vérifiez les informations saisies.",
     slotTaken: "Ce créneau vient d'être réservé. Merci d'en choisir un autre.",
     server: "Une erreur est survenue. Merci de réessayer.",
     unauthorized: "Votre session a expiré. Reconnectez-vous.",
     badRequest: "La demande est invalide.",
+    rateLimited: "Trop de tentatives. Merci de réessayer dans quelques minutes.",
   },
 } as const;

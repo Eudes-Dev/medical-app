@@ -87,6 +87,8 @@ describe("getAppointmentsByDateRange (Story 3.2)", () => {
         patient: {
           select: { id: true, firstName: true, lastName: true },
         },
+        // Story 7.3 : couleur du service rattaché pour l'accent de carte.
+        serviceType: { select: { color: true } },
       },
       orderBy: { startTime: "asc" },
     });

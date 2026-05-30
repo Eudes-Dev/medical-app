@@ -1,13 +1,18 @@
 /**
  * Tests unitaires pour le hook useDebounce
- * 
+ *
  * Test ID: 2.1-UNIT-002
  * Priority: P1
  * Level: Unit
+ *
+ * Note (story 5.3) : avec des fake timers Vitest, `waitFor` est proscrit — son
+ * polling repose sur des timers eux-mêmes gelés, d'où un timeout systématique.
+ * On avance le temps dans `act()` (ce qui flush la mise à jour d'état) puis on
+ * asserte de façon synchrone.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { useDebounce } from "@/hooks/use-debounce";
 
 describe("useDebounce", () => {
@@ -20,7 +25,7 @@ describe("useDebounce", () => {
     vi.useRealTimers();
   });
 
-  it("2.1-UNIT-002: devrait retarder la mise à jour de la valeur de 300ms par défaut", async () => {
+  it("2.1-UNIT-002: devrait retarder la mise à jour de la valeur de 300ms par défaut", () => {
     const { result, rerender } = renderHook(
       ({ value }) => useDebounce(value),
       {
@@ -38,17 +43,19 @@ describe("useDebounce", () => {
     expect(result.current).toBe("initial");
 
     // Avancer le temps de 299ms
-    vi.advanceTimersByTime(299);
+    act(() => {
+      vi.advanceTimersByTime(299);
+    });
     expect(result.current).toBe("initial");
 
     // Avancer le temps de 1ms de plus (total 300ms)
-    vi.advanceTimersByTime(1);
-    await waitFor(() => {
-      expect(result.current).toBe("updated");
+    act(() => {
+      vi.advanceTimersByTime(1);
     });
+    expect(result.current).toBe("updated");
   });
 
-  it("devrait utiliser le délai personnalisé fourni", async () => {
+  it("devrait utiliser le délai personnalisé fourni", () => {
     const customDelay = 500;
     const { result, rerender } = renderHook(
       ({ value }) => useDebounce(value, customDelay),
@@ -57,9 +64,7 @@ describe("useDebounce", () => {
       }
     );
 
-    act(() => {
-      rerender({ value: "updated" });
-    });
+    rerender({ value: "updated" });
 
     // Avancer de 499ms - ne devrait pas être mis à jour
     act(() => {
@@ -71,12 +76,10 @@ describe("useDebounce", () => {
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    await waitFor(() => {
-      expect(result.current).toBe("updated");
-    });
+    expect(result.current).toBe("updated");
   });
 
-  it("devrait annuler le timer précédent si la valeur change rapidement", async () => {
+  it("devrait annuler le timer précédent si la valeur change rapidement", () => {
     const { result, rerender } = renderHook(
       ({ value }) => useDebounce(value, 300),
       {
@@ -107,12 +110,10 @@ describe("useDebounce", () => {
     act(() => {
       vi.advanceTimersByTime(300);
     });
-    await waitFor(() => {
-      expect(result.current).toBe("value3");
-    });
+    expect(result.current).toBe("value3");
   });
 
-  it("devrait fonctionner avec différents types de valeurs", async () => {
+  it("devrait fonctionner avec différents types de valeurs", () => {
     // Test avec un nombre
     const { result: numberResult, rerender: rerenderNumber } = renderHook(
       ({ value }) => useDebounce(value, 300),
@@ -121,13 +122,14 @@ describe("useDebounce", () => {
       }
     );
 
+    // Séparer le rerender (qui (re)programme le timer via l'effet) de l'avance
+    // du temps : sinon `advanceTimersByTime` s'exécute avant que l'effet n'ait
+    // enregistré le nouveau timer, et la valeur n'est jamais flushée.
+    rerenderNumber({ value: 42 });
     act(() => {
-      rerenderNumber({ value: 42 });
       vi.advanceTimersByTime(300);
     });
-    await waitFor(() => {
-      expect(numberResult.current).toBe(42);
-    });
+    expect(numberResult.current).toBe(42);
 
     // Test avec un objet
     const { result: objectResult, rerender: rerenderObject } = renderHook(
@@ -137,12 +139,10 @@ describe("useDebounce", () => {
       }
     );
 
+    rerenderObject({ value: { name: "updated" } });
     act(() => {
-      rerenderObject({ value: { name: "updated" } });
       vi.advanceTimersByTime(300);
     });
-    await waitFor(() => {
-      expect(objectResult.current).toEqual({ name: "updated" });
-    });
+    expect(objectResult.current).toEqual({ name: "updated" });
   });
 });

@@ -1,0 +1,141 @@
+schema: 1
+story: "5.3"
+story_title: "Consolidation pré-production (TZ, rate-limiting, route d'annulation, migrations)"
+gate: CONCERNS
+status_reason: >-
+  Travail de dev de haute qualité et entièrement vérifié : 445/445 tests verts (51 fichiers,
+  exécutés par le reviewer), tsc propre sur tous les fichiers de la story (11 erreurs résiduelles
+  confinées à 3 fichiers de test hors périmètre), eslint propre. Les 5 bloquants ciblés sont
+  traités : TZ Europe/Paris prouvée CET+CEST (REL-001), rate-limiter public branché (SEC-001),
+  route d'annulation publique idempotente et neutre (CANCEL-ROUTE-001), divergence de migration
+  6.2 détectée et matérialisée idempotemment (OPS-001), baseline de tests assainie
+  (TEST-BASELINE-001). Gate CONCERNS — non PASS — pour deux raisons : (1) le rate-limiter dérive
+  l'IP du `x-forwarded-for` gauche, falsifiable par le client → sur Vercel (proxy + multi-instance
+  + cold start) la protection SEC-001 est réelle mais contournable/partielle ; (2) deux AC
+  bloquants prod restent NON exécutés par conception (AC 11 `migrate deploy`/`migrate status` sur
+  base live, AC 14 suite E2E Playwright) — consignés et délégués à l'ops/CI, donc vérifiés-comme-
+  pending et non clos. Le code est mergeable ; l'exposition en production reste conditionnée à ces
+  actions ops + idéalement au durcissement de l'extraction d'IP.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-05-30T13:37:51Z"
+expires: "2026-06-13T13:37:51Z"
+
+quality_score: 80
+
+evidence:
+  tests_reviewed: 445
+  tests_run_by_reviewer: true
+  tests_result: "51 fichiers / 445 tests / 0 échec (npx vitest run, runner UTC)"
+  tsc_result: "11 erreurs, toutes dans tests/integration/{calendar,dashboard,patients}/actions.test.ts (typage union Prisma, préexistant, hors File List 5.3)"
+  eslint_result: "propre sur les fichiers de la story"
+  risks_identified: 4
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13]
+    ac_partial: [11, 14] # exécution ops/CI non réalisable en sandbox — consignée, déléguée
+    ac_gaps: []
+
+top_issues:
+  - id: "SEC-002"
+    severity: medium
+    title: "Rate-limiter : IP dérivée du x-forwarded-for gauche (falsifiable)"
+    description: >-
+      getClientIp() (lib/server/rate-limit.ts:75-83) retient la PREMIÈRE valeur de
+      `x-forwarded-for`, contrôlée par le client. Un attaquant qui fait tourner cet en-tête
+      contourne intégralement le seau par-IP, neutralisant la protection SEC-001. Sur Vercel,
+      la valeur de confiance est l'IP ajoutée par la plateforme (position droite de la chaîne
+      proxy, ou `request.ip` / en-tête de confiance équivalent). Acceptable pour un MVP
+      single-instance, mais la protection effective est plus faible que l'AC 4/5 ne le laisse
+      entendre. Recommandation : dériver l'IP d'une position de proxy de confiance.
+    refs:
+      - "lib/server/rate-limit.ts:75-83"
+    suggested_owner: dev
+  - id: "SEC-003"
+    severity: low
+    title: "GET de la page d'annulation non rate-limité"
+    description: >-
+      La Server Action cancelByToken est rate-limitée, mais le rendu de la page
+      (cancel/page.tsx:36-41) exécute un prisma.appointment.findUnique({ where:
+      { cancellationToken } }) non authentifié et non throttlé à chaque GET. Un token valide
+      révèle date + type du RDV. Le token étant un UUID v4 (122 bits, énumération infaisable)
+      et l'accès en lecture seule, la sévérité est faible. Défense en profondeur : throttler
+      aussi la lecture de page, ou centraliser le lookup throttlé.
+    refs:
+      - "app/(public)/[cabinet-slug]/book/cancel/page.tsx:36-41"
+    suggested_owner: dev
+  - id: "OPS-002"
+    severity: medium
+    title: "AC 11 / AC 14 : migrate deploy et E2E non exécutés (par conception)"
+    description: >-
+      `prisma migrate status` / `migrate deploy` (AC 11) et la suite Playwright (AC 14) ne sont
+      pas exécutables depuis la sandbox dev (base Supabase injoignable P1001 ; .env.test absent
+      bloquant le global-setup). Ces deux points sont correctement consignés
+      (docs/dette/2026-05-30-procedure-migration-prod.md ; 2026-05-16-prerequis-execution-e2e-
+      playwright.md) et explicitement cadrés comme actions ops/CI. Conséquence : deux conditions
+      bloquant la PROD restent vérifiées-comme-pending. À clore par l'ops au déploiement (+ CI
+      13.1) avant exposition publique.
+    refs:
+      - "docs/dette/2026-05-30-procedure-migration-prod.md"
+      - "docs/dette/2026-05-16-prerequis-execution-e2e-playwright.md"
+    suggested_owner: ops
+  - id: "OPS-003"
+    severity: low
+    title: "Migration enum ADD VALUE — vérifier la cible Postgres"
+    description: >-
+      20260530000006 utilise `ALTER TYPE \"MessageType\" ADD VALUE IF NOT EXISTS`. Les valeurs
+      sont seulement ajoutées (jamais consommées dans la même migration), donc compatible
+      Postgres 12+ en transaction (Supabase = PG15 → OK). À garder à l'esprit si la cible
+      changeait : `ADD VALUE` en transaction est interdit avant PG12.
+    refs:
+      - "prisma/migrations/20260530000006_add_reminders_optout/migration.sql:19-20"
+    suggested_owner: ops
+
+waiver:
+  active: false
+
+nfr_validation:
+  security:
+    status: CONCERNS
+    notes: >-
+      Rate-limiter branché sur getAvailableSlots (30/min/IP), createGuestBooking (5/10min/IP) et
+      cancelByToken (10/10min/IP), erreurs neutres mappées (RATE_LIMITED). Route d'annulation
+      publique correctement protégée par token UUID opaque + message neutre anti-énumération,
+      idempotente, sans fuite (test SERVER neutre). Faiblesses : extraction d'IP falsifiable
+      (SEC-002, medium) et GET page d'annulation non throttlé (SEC-003, low). Limiteur en mémoire
+      single-instance documenté (réinitialisé au cold start, non distribué) — protection partielle
+      en déploiement serverless multi-instance.
+  reliability:
+    status: PASS
+    notes: >-
+      REL-001 clos : correction TZ centralisée (lib/cabinet/timezone.ts, source unique
+      CABINET_TIMEZONE via date-fns-tz + Intl), prouvée indépendante du fuseau process en CET ET
+      CEST (tests asserts UTC, runner UTC = repro Vercel). zonedDayBoundsUtc robuste aux jours de
+      23h/25h. cancelByToken idempotent (déjà CANCELLED ⇒ succès silencieux), email d'annulation
+      fire-and-forget. Init paresseuse du client Resend (getResend) — supprime un crash à l'import.
+  performance:
+    status: PASS
+    notes: >-
+      Rate-limiter O(n) sur des seaux courts (pruning par fenêtre), check avant toute requête DB.
+      Requêtes par jour bornées par zonedDayBoundsUtc, Promise.all (appointments + timeOff),
+      select Prisma restreints. Pas de N+1 introduit.
+  maintainability:
+    status: PASS
+    notes: >-
+      Module TZ isolé et densément documenté, réutilisé par slots.ts / time-off.ts / actions.ts
+      (DRY). Limiteur signature stable (point d'extension Upstash documenté). Tests ciblés et
+      lisibles (un test = un comportement). Procédure de migration et fiches dette à jour.
+
+recommendations:
+  immediate: # À traiter avant exposition publique
+    - action: "Ops : exécuter prisma migrate status → migrate deploy (+ resolve --applied 20260530000006 sur base dev alignée) → migrate status (AC 11)"
+      refs: ["docs/dette/2026-05-30-procedure-migration-prod.md"]
+    - action: "Ops/CI : exécuter la suite Playwright sur infra de test, consigner le résultat, tracer tout rouge (AC 14)"
+      refs: ["docs/dette/2026-05-16-prerequis-execution-e2e-playwright.md", "tests/e2e/"]
+    - action: "Durcir getClientIp : dériver l'IP d'une position de proxy de confiance (Vercel) plutôt que du x-forwarded-for gauche (SEC-002)"
+      refs: ["lib/server/rate-limit.ts:75-83"]
+  future: # Peut être traité plus tard
+    - action: "Throttler aussi le GET de la page d'annulation, ou centraliser le lookup throttlé (SEC-003)"
+      refs: ["app/(public)/[cabinet-slug]/book/cancel/page.tsx:36-41"]
+    - action: "Backend distribué pour le rate-limiter (Upstash Redis) au passage multi-instance — point d'extension déjà documenté"
+      refs: ["lib/server/rate-limit.ts"]
+    - action: "Résorber les 11 erreurs tsc préexistantes (typage union Prisma) dans les tests calendar/dashboard/patients"
+      refs: ["tests/integration/calendar/actions.test.ts", "tests/integration/dashboard/actions.test.ts", "tests/integration/patients/actions.test.ts"]

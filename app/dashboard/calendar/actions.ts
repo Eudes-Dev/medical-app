@@ -32,6 +32,10 @@ const CALENDAR_PATH = "/dashboard/calendar";
 
 /**
  * Mappe un rendez-vous Prisma (avec patient) vers le type AppointmentWithPatient.
+ *
+ * Expose `serviceTypeId` et `serviceColor` (jeton de couleur du service rattaché,
+ * story 7.3) pour l'accent couleur de la carte calendrier (AC 5). `serviceColor`
+ * est `null` pour les RDV legacy (sans service).
  */
 function toAppointmentWithPatient(a: {
   id: string;
@@ -40,6 +44,8 @@ function toAppointmentWithPatient(a: {
   endTime: Date;
   status: string;
   type: string;
+  serviceTypeId?: string | null;
+  serviceType?: { color: string } | null;
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -52,6 +58,8 @@ function toAppointmentWithPatient(a: {
     endTime: a.endTime,
     status: a.status as AppointmentStatus,
     type: a.type,
+    serviceTypeId: a.serviceTypeId ?? null,
+    serviceColor: a.serviceType?.color ?? null,
     notes: a.notes ?? undefined,
     createdAt: a.createdAt,
     updatedAt: a.updatedAt,
@@ -104,6 +112,8 @@ export async function getAppointmentsByDateRange(
           lastName: true,
         },
       },
+      // Couleur du service rattaché (story 7.3) — accent secondaire de la carte.
+      serviceType: { select: { color: true } },
     },
     orderBy: { startTime: "asc" },
   });
@@ -185,8 +195,26 @@ export async function createAppointment(
       };
     }
 
-    const { patientId, startTime, duration, type, notes } = parsed.data;
-    const endTime = addMinutes(startTime, duration);
+    const { patientId, startTime, duration, serviceTypeId, type, notes } =
+      parsed.data;
+
+    // Story 7.3 : si un type de soin est sélectionné, il fait autorité — on en
+    // tire le libellé-instantané (`type`) et la durée réelle (`endTime`). Sinon
+    // (RDV legacy / aucun service configuré) on conserve le comportement 3.3.
+    let snapshotType = type ?? "Consultation";
+    let durationMin = duration;
+    if (serviceTypeId) {
+      const service = await prisma.serviceType.findUnique({
+        where: { id: serviceTypeId },
+        select: { label: true, durationMin: true },
+      });
+      if (!service) {
+        return { success: false, error: "Type de soin introuvable." };
+      }
+      snapshotType = service.label;
+      durationMin = service.durationMin;
+    }
+    const endTime = addMinutes(startTime, durationMin);
 
     const { hasConflict, conflictingAppointment } = await checkConflict(
       startTime,
@@ -205,9 +233,11 @@ export async function createAppointment(
         patientId,
         startTime,
         endTime,
-        type,
+        type: snapshotType,
         notes: notes ?? null,
         status: "PENDING",
+        // N'ajoute la FK que si un service est sélectionné (RDV legacy = absent).
+        ...(serviceTypeId ? { serviceTypeId } : {}),
       },
       include: {
         patient: {
@@ -259,14 +289,33 @@ export async function updateAppointment(
     let startTime = existing.startTime;
     let endTime = existing.endTime;
 
-    if (data.startTime != null || data.duration != null) {
+    // Story 7.3 : si un type de soin est (re)sélectionné, il fait autorité pour
+    // le libellé-instantané et la durée réelle. Sinon on préserve le snapshot
+    // legacy (`existing.type`) — ne jamais le perdre lors d'une simple édition.
+    let serviceTypeId: string | null = existing.serviceTypeId ?? null;
+    let type = data.type ?? existing.type;
+    let serviceDurationMin: number | null = null;
+    if (data.serviceTypeId) {
+      const service = await prisma.serviceType.findUnique({
+        where: { id: data.serviceTypeId },
+        select: { label: true, durationMin: true },
+      });
+      if (!service) {
+        return { success: false, error: "Type de soin introuvable." };
+      }
+      serviceTypeId = data.serviceTypeId;
+      type = service.label;
+      serviceDurationMin = service.durationMin;
+    }
+
+    if (data.startTime != null || data.duration != null || serviceDurationMin != null) {
       // Calcul du nouveau créneau (la durée en base peut ne pas être 15/30/45/60)
       const existingDurationMinutes = Math.round(
         (existing.endTime.getTime() - existing.startTime.getTime()) / (60 * 1000)
       );
       startTime = data.startTime ?? existing.startTime;
       const durationMinutes =
-        data.duration ?? existingDurationMinutes;
+        serviceDurationMin ?? data.duration ?? existingDurationMinutes;
       if (durationMinutes < 1 || durationMinutes > 240) {
         return { success: false, error: "Durée invalide (1 à 240 min)." };
       }
@@ -286,12 +335,11 @@ export async function updateAppointment(
       }
     }
 
-    const type = data.type ?? existing.type;
     const notes = data.notes !== undefined ? data.notes : existing.notes;
 
     const updated = await prisma.appointment.update({
       where: { id },
-      data: { startTime, endTime, type, notes: notes ?? null },
+      data: { startTime, endTime, type, notes: notes ?? null, serviceTypeId },
       include: {
         patient: { select: { id: true, firstName: true, lastName: true } },
       },

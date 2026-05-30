@@ -1,0 +1,77 @@
+schema: 1
+story: "7.3"
+story_title: "Types de soins paramétrables"
+gate: CONCERNS
+status_reason: >-
+  Implémentation complète des 11 ACs : modèle ServiceType + migration NON destructive
+  (serviceTypeId nullable, type String conservé en snapshot, onDelete:SetNull), palette pure
+  8 couleurs, Zod, CRUD + getPublicServiceTypes, étape "motif" dans le tunnel, migration du modal
+  dashboard, suppression protégée (HAS_APPOINTMENTS → archivage), repli tunnel si aucun service
+  public. Tests 7.3 ciblés verts (unit colors/zod + intégration actions + régressions tunnel/
+  calendar). Gate CONCERNS : (1) carry-overs prod TZ/rate-limit hérités du tunnel (story 5.3) ;
+  (2) affaiblissement du contrat appointmentSchema.type (enum → string libre) à acter ; (3) E2E
+  "configurer service → /book → durée" non automatisé (carry-over 7.1/7.2).
+reviewer: "Sarah (PO) — gate rétro-créée"
+updated: "2026-05-30T00:00:00Z"
+expires: "2026-06-13T00:00:00Z"
+
+quality_score: 80
+
+evidence:
+  tests_reviewed: 30
+  risks_identified: 3
+  trace:
+    ac_covered: [1, 2, 3, 4, 6, 7, 8, 9, 11]
+    ac_gaps: [5, 10] # couleur calendrier & a11y/états UI : visuels, non automatisés
+
+top_issues:
+  - id: "CONTRACT-001"
+    severity: low
+    title: "appointmentSchema.type : enum statique → string libre"
+    description: >-
+      La migration du modal a transformé type: z.enum(APPOINTMENT_TYPES) en libellé-instantané
+      libre (string ≤ 60) + serviceTypeId UUID. Le test "rejette un type inconnu" a été retiré.
+      Légitime (snapshot historique) mais affaiblit la validation d'entrée — à acter par le PO.
+    refs:
+      - "lib/validations/appointment.ts"
+    suggested_owner: po
+  - id: "REL-001"
+    severity: medium
+    title: "Carry-over TZ tunnel (story 5.3)"
+    description: "Durée de service → endTime correct, mais startTime hérite du défaut TZ serveur du tunnel."
+    refs: ["app/(public)/[cabinet-slug]/book/actions.ts"]
+    suggested_owner: dev
+  - id: "TEST-001"
+    severity: low
+    title: "AC 5 (accent couleur calendrier) & AC 10 (a11y/états UI) non automatisés"
+    description: "Couvert par le TODO E2E/composant global (carry-over 7.1/7.2)."
+    refs: ["components/calendar/AppointmentCard.tsx", "components/settings/service-type-form.tsx"]
+    suggested_owner: dev
+
+waiver:
+  active: false
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >-
+      requireUser sur le CRUD ; getPublicServiceTypes en lecture seule, select limité ;
+      createGuestBooking revalide active && isPublic (défense en profondeur AC 9). Rate-limiter
+      public hérité → story 5.3.
+  performance:
+    status: PASS
+    notes: "@@index([active, isPublic]) ; DTO Decimal→number ; pas de surfetch."
+  reliability:
+    status: CONCERNS
+    notes: "Migration non destructive (pas de back-fill requis) ; carry-over TZ tunnel."
+  maintainability:
+    status: PASS
+    notes: "Palette pure isolée, Zod isolé, snapshot type documenté, conventions 7.1/7.2 suivies."
+
+recommendations:
+  immediate:
+    - action: "Acter le passage type enum→string libre (décision PO)"
+      refs: ["lib/validations/appointment.ts"]
+  future:
+    - action: "E2E : configurer un service public → le sélectionner dans /book → vérifier durée RDV"
+      refs: ["tests/e2e/"]

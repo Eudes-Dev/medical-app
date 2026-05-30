@@ -4,7 +4,7 @@
  * Toutes les actions de ce fichier sont **non authentifiées** (patients
  * invités). Elles doivent donc:
  * - Valider strictement leurs entrées avec Zod (date dans le futur, max 90j)
- * - Limiter le débit par IP (TODO: brancher le rate limiter de la story 13.5)
+ * - Limiter le débit par IP (rate-limiter en mémoire, story 5.3 / SEC-001)
  * - Ne renvoyer aucune information personnelle (PII) — `select` Prisma
  *   limité à `startTime` / `endTime`.
  *
@@ -13,12 +13,34 @@
 
 "use server";
 
-import { addDays, addMinutes, startOfDay, startOfToday, endOfDay } from "date-fns";
+import { addDays, addMinutes, startOfToday } from "date-fns";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { CABINET_DEFAULT_SLUG } from "@/lib/cabinet/config";
 import { filterAvailableSlots, isOverlapping } from "@/lib/cabinet/slots";
 import { toMinutes, type WorkingHourRange } from "@/lib/cabinet/working-hours";
+import {
+  zonedDayOfWeek,
+  zonedMinutes,
+  zonedDayBoundsUtc,
+} from "@/lib/cabinet/timezone";
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit";
+
+/**
+ * Seuils de rate-limiting par IP (story 5.3, SEC-001).
+ * Lecture (créneaux) plus permissive ; création de RDV plus stricte.
+ */
+const RATE_LIMITS = {
+  /** Lecture des créneaux disponibles : 30 requêtes / minute / IP. */
+  slots: { limit: 30, windowMs: 60_000 },
+  /** Création de réservation invité : 5 requêtes / 10 minutes / IP. */
+  booking: { limit: 5, windowMs: 10 * 60_000 },
+} as const;
+import {
+  isDayFullyBlocked,
+  slotInPartialTimeOff,
+  type TimeOffInterval,
+} from "@/lib/cabinet/time-off";
 import {
   guestBookingSchema,
   type GuestBookingValues,
@@ -47,7 +69,7 @@ const getAvailableSlotsSchema = z.object({
 export type GetAvailableSlotsInput = z.input<typeof getAvailableSlotsSchema>;
 export type GetAvailableSlotsResult =
   | { slots: string[] } // ISO strings — sérialisables côté client
-  | { error: string };
+  | { error: string }; // message neutre OU code "RATE_LIMITED" (story 5.3)
 
 /**
  * Retourne la liste des créneaux disponibles pour une date donnée.
@@ -72,12 +94,18 @@ export async function getAvailableSlots(
     };
   }
 
-  // TODO(story 13.5): brancher le rate limiter par IP avant la requête DB.
-  // Pour l'instant: fallback no-op — à tracer dans le backlog.
+  // Rate-limiting par IP avant toute requête DB (story 5.3, SEC-001).
+  const ip = await getClientIp();
+  if (!checkRateLimit(`slots:${ip}`, RATE_LIMITS.slots.limit, RATE_LIMITS.slots.windowMs).ok) {
+    return { error: "RATE_LIMITED" };
+  }
 
   const { date } = parsed.data;
-  // 0=Dimanche … 6=Samedi — convention alignée avec WorkingHours.dayOfWeek.
-  const dayOfWeek = date.getDay();
+  // 0=Dimanche … 6=Samedi — jour de semaine en heure de Paris (story 5.3),
+  // aligné avec la convention WorkingHours.dayOfWeek.
+  const dayOfWeek = zonedDayOfWeek(date);
+  // Bornes UTC du jour de Paris ciblé (REL-001) — indépendantes du fuseau serveur.
+  const { startUtc, endUtc } = zonedDayBoundsUtc(date);
 
   try {
     // Plages travaillées du jour (story 7.1). Aucune plage active ⇒ jour fermé.
@@ -89,15 +117,32 @@ export async function getAvailableSlots(
       return { slots: [] };
     }
 
-    const appointments = await prisma.appointment.findMany({
-      where: {
-        startTime: { gte: startOfDay(date), lt: endOfDay(date) },
-        status: { not: "CANCELLED" },
-      },
-      select: { startTime: true, endTime: true },
-    });
+    const [appointments, timeOffs] = await Promise.all([
+      prisma.appointment.findMany({
+        where: {
+          startTime: { gte: startUtc, lt: endUtc },
+          status: { not: "CANCELLED" },
+        },
+        select: { startTime: true, endTime: true },
+      }),
+      // Exceptions actives (congés / fériés story 7.2) intersectant la date.
+      prisma.timeOff.findMany({
+        where: {
+          active: true,
+          startDate: { lt: endUtc },
+          endDate: { gte: startUtc },
+        },
+        select: {
+          startDate: true,
+          endDate: true,
+          allDay: true,
+          startTime: true,
+          endTime: true,
+        },
+      }),
+    ]);
 
-    const slots = filterAvailableSlots(date, appointments, ranges);
+    const slots = filterAvailableSlots(date, appointments, ranges, timeOffs);
 
     return { slots: slots.map((s) => s.start.toISOString()) };
   } catch (err) {
@@ -116,7 +161,11 @@ export async function getAvailableSlots(
 /** Type de consultation par défaut pour les RDV créés via le tunnel public. */
 const DEFAULT_GUEST_APPOINTMENT_TYPE = "Première consultation";
 
-export type CreateGuestBookingError = "VALIDATION" | "SLOT_TAKEN" | "SERVER";
+export type CreateGuestBookingError =
+  | "VALIDATION"
+  | "SLOT_TAKEN"
+  | "SERVER"
+  | "RATE_LIMITED";
 
 export type CreateGuestBookingResult =
   | { success: true; appointmentId: string }
@@ -157,10 +206,12 @@ const FALLBACK_SLOT_MINUTES = 30;
  */
 async function resolveSlotDuration(slot: Date): Promise<number> {
   const ranges = await prisma.workingHours.findMany({
-    where: { dayOfWeek: slot.getDay(), active: true },
+    where: { dayOfWeek: zonedDayOfWeek(slot), active: true },
     select: { startTime: true, endTime: true, slotDuration: true },
   });
-  const slotMin = slot.getHours() * 60 + slot.getMinutes();
+  // Heure murale du créneau en Paris (story 5.3) — cohérente avec les bornes
+  // de plage "HH:mm" heure de Paris.
+  const slotMin = zonedMinutes(slot);
   const containing = ranges.find(
     (r) => slotMin >= toMinutes(r.startTime) && slotMin < toMinutes(r.endTime),
   );
@@ -172,7 +223,7 @@ async function resolveSlotDuration(slot: Date): Promise<number> {
  *
  * Étapes:
  *  1. Validation Zod stricte (serveur — défense en profondeur).
- *  2. TODO rate limiter (story 13.5).
+ *  2. Rate-limiting par IP (story 5.3, SEC-001).
  *  3. Vérification anti-collision : si le créneau est devenu indisponible
  *     entre la sélection et la soumission → `SLOT_TAKEN`.
  *  4. Lookup / création du Patient (par email).
@@ -193,24 +244,51 @@ export async function createGuestBooking(
     };
   }
 
-  // TODO(story 13.5): brancher le rate limiter par IP avant la requête DB.
-  // Même TODO que `getAvailableSlots` — à mutualiser lorsque le limiter
-  // sera disponible.
+  // Rate-limiting par IP (story 5.3, SEC-001) — seuil de création plus strict
+  // que la lecture. Vérifié après la validation Zod, avant toute requête DB.
+  const ip = await getClientIp();
+  if (!checkRateLimit(`booking:${ip}`, RATE_LIMITS.booking.limit, RATE_LIMITS.booking.windowMs).ok) {
+    return { error: "RATE_LIMITED" };
+  }
 
   const data = parsed.data;
   const slot = new Date(data.slotISO);
+  // Bornes UTC du jour de Paris du créneau (story 5.3) pour les requêtes du jour.
+  const { startUtc, endUtc } = zonedDayBoundsUtc(slot);
 
   try {
-    // Durée du créneau = slotDuration de la plage (WorkingHours) qui contient
-    // l'instant choisi (story 7.1). Fallback 30 min si aucune plage ne le
-    // couvre (incohérence horaires/créneau soumis) afin de ne pas bloquer.
-    const slotMinutes = await resolveSlotDuration(slot);
+    // Story 7.3 : si un type de soin est soumis, on revalide côté serveur qu'il
+    // est bien `active && isPublic` (défense en profondeur AC 9 — un client
+    // obsolète ne doit pas réserver un service privé/archivé). La durée réelle
+    // (`endTime`) et le libellé-instantané (`type`) en proviennent alors.
+    // Sinon (aucun service public configuré), repli : durée = slotDuration de la
+    // plage WorkingHours (story 7.1), type = "Première consultation".
+    let appointmentType = DEFAULT_GUEST_APPOINTMENT_TYPE;
+    let serviceTypeId: string | undefined;
+    let slotMinutes: number;
+    if (data.serviceTypeId) {
+      const service = await prisma.serviceType.findFirst({
+        where: { id: data.serviceTypeId, active: true, isPublic: true },
+        select: { id: true, label: true, durationMin: true },
+      });
+      if (!service) {
+        return {
+          error: "VALIDATION",
+          message: "Ce type de soin n'est plus disponible.",
+        };
+      }
+      appointmentType = service.label;
+      serviceTypeId = service.id;
+      slotMinutes = service.durationMin;
+    } else {
+      slotMinutes = await resolveSlotDuration(slot);
+    }
     const endTime = addMinutes(slot, slotMinutes);
 
     // 3. Anti-collision — on relit les RDV du jour et on applique `isOverlapping`.
     const sameDayAppointments = await prisma.appointment.findMany({
       where: {
-        startTime: { gte: startOfDay(slot), lt: endOfDay(slot) },
+        startTime: { gte: startUtc, lt: endUtc },
         status: { not: "CANCELLED" },
       },
       select: { startTime: true, endTime: true },
@@ -219,6 +297,31 @@ export async function createGuestBooking(
       isOverlapping(slot, slotMinutes, apt),
     );
     if (collision) {
+      return { error: "SLOT_TAKEN" };
+    }
+
+    // 3.bis Défense en profondeur (story 7.2, AC 6) — un client obsolète ne
+    // doit pas pouvoir réserver un créneau bloqué par une exception active.
+    // Le tunnel public renvoie déjà `[]` côté `getAvailableSlots`, mais rien
+    // n'empêche un POST direct avec un ancien `slotISO`.
+    const timeOffs: TimeOffInterval[] = await prisma.timeOff.findMany({
+      where: {
+        active: true,
+        startDate: { lt: endUtc },
+        endDate: { gte: startUtc },
+      },
+      select: {
+        startDate: true,
+        endDate: true,
+        allDay: true,
+        startTime: true,
+        endTime: true,
+      },
+    });
+    if (
+      isDayFullyBlocked(slot, timeOffs) ||
+      slotInPartialTimeOff(slot, slotMinutes, timeOffs)
+    ) {
       return { error: "SLOT_TAKEN" };
     }
 
@@ -233,8 +336,10 @@ export async function createGuestBooking(
         startTime: slot,
         endTime,
         status: "PENDING",
-        type: DEFAULT_GUEST_APPOINTMENT_TYPE,
+        type: appointmentType,
         cancellationToken,
+        // N'ajoute la FK que si un service public a été résolu (repli = absent).
+        ...(serviceTypeId ? { serviceTypeId } : {}),
       },
       select: { id: true },
     });
@@ -249,7 +354,7 @@ export async function createGuestBooking(
         patientEmail: data.email,
         patientFirstName: data.firstName,
         appointmentDate: slot,
-        appointmentType: DEFAULT_GUEST_APPOINTMENT_TYPE,
+        appointmentType,
         cancellationToken,
         cabinetSlug: CABINET_DEFAULT_SLUG,
       }).catch((err) => console.error("[email:confirmation] envoi échoué:", err));
@@ -266,7 +371,7 @@ export async function createGuestBooking(
           // Branche `else` : data.email est forcément falsy ici → pas de
           // fallbackEmail (lecture stricte AC 6.3-1). QA CODE-001.
           appointmentDate: slot,
-          appointmentType: DEFAULT_GUEST_APPOINTMENT_TYPE,
+          appointmentType,
           cancellationToken,
           cabinetSlug: CABINET_DEFAULT_SLUG,
         }).catch((err) => console.error("[sms:confirmation] envoi échoué:", err));
@@ -280,7 +385,7 @@ export async function createGuestBooking(
       patientPhone: data.phone,
       patientEmail: data.email,
       appointmentDate: slot,
-      appointmentType: DEFAULT_GUEST_APPOINTMENT_TYPE,
+      appointmentType,
     }).catch((err) => console.error("[email:practitioner] envoi échoué:", err));
 
     return { success: true, appointmentId: appointment.id };

@@ -1,8 +1,10 @@
 # [FOLLOW-UP 3.6 → 13.1] Intégrer le job `e2e-calendar` à la CI
 
 **Story source :** 3.6 (Dette technique — Runner E2E Calendrier)
-**Story bloquante :** 13.1 (CI/CD GitHub Actions — *Draft* à date du 2026-05-16)
-**Statut :** ouvert, à planifier dès que 13.1 est en cours
+**Story bloquante :** 13.1 (CI/CD GitHub Actions — **descopée en backlog post-MVP** au 2026-05-30, voir [ROADMAP](../stories/ROADMAP.md))
+**Statut :** ouvert, à planifier lors de la reprise de l'épopée 13 (DevOps)
+
+> ⚠️ **Mise à jour 2026-05-30 :** 13.1 n'est plus une story active du dépôt. En attendant sa reprise, l'exécution E2E reste **manuelle** et doit être consignée via la [story 5.3](../stories/5.3.consolidation-pre-prod.story.md) (AC 14). Ce follow-up reste valable comme spécification du futur job CI.
 
 ## Contexte
 

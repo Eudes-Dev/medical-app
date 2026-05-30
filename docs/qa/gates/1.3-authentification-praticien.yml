@@ -1,0 +1,40 @@
+schema: 1
+story: "1.3"
+story_title: "Authentification praticien"
+gate: PASS
+status_reason: >-
+  Supabase Auth via @supabase/ssr (non déprécié), page /login avec validation Zod + react-hook-form,
+  Server Actions signIn/signOut, middleware protégeant /dashboard/** avec getUser() (validation
+  serveur, pas getSession), redirection /login si non authentifié, bouton déconnexion. 7 ACs
+  satisfaits. La protection des routes est re-vérifiée par les specs E2E de 5.2 (à exécuter).
+reviewer: "Sarah (PO) — gate rétro-créée"
+updated: "2026-05-30T00:00:00Z"
+expires: "2026-06-30T00:00:00Z"
+
+quality_score: 90
+
+evidence:
+  tests_reviewed: 0
+  risks_identified: 1
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7]
+    ac_gaps: []
+
+top_issues:
+  - id: "E2E-EXEC-002"
+    severity: low
+    title: "Protection des routes prouvée par E2E 5.2 non encore exécutés"
+    description: >-
+      Les specs 1.3-auth-praticien / 1.3-protection-routes (story 5.2) couvrent ces ACs mais
+      n'ont pas été exécutées. Vérification consolidée dans la story 5.3 (AC 14).
+    refs: ["tests/e2e/auth/"]
+    suggested_owner: dev
+
+waiver:
+  active: false
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Exécuter les E2E auth (story 5.3 AC 14)"
+      refs: ["tests/e2e/auth/"]

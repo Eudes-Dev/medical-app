@@ -1,0 +1,74 @@
+schema: 1
+story: "5.2"
+story_title: "Sécurisation & Tests E2E"
+gate: CONCERNS
+status_reason: >-
+  Refactor sécurité solide : helper requireUser()/getCurrentUser() centralisé, suppression de la
+  duplication ensureAuth(), validation UUID + BadRequestError sur les 6 actions par id, audit
+  sanitization Zod (.trim()), 3 specs E2E (flux invité, auth praticien, protection routes) +
+  1 spec authentifiée, 15 tests unitaires verts, greps DoD à 0 hit. Gate CONCERNS car les suites
+  E2E n'ont PAS été exécutées dans l'environnement du Dev (pas de Postgres/Supabase de test
+  provisionnés) — la DoD E2E est explicitement laissée décochée. La vérification reste à faire.
+reviewer: "Sarah (PO) — gate rétro-créée"
+updated: "2026-05-30T00:00:00Z"
+expires: "2026-06-13T00:00:00Z"
+
+quality_score: 80
+
+evidence:
+  tests_reviewed: 15
+  risks_identified: 2
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14]
+    ac_gaps: [10] # flux invité E2E écrit mais non exécuté
+
+top_issues:
+  - id: "E2E-EXEC-002"
+    severity: medium
+    title: "Suites E2E 5.2 écrites mais non exécutées"
+    description: >-
+      4.2-flux-invite.spec.ts, 1.3-auth-praticien.spec.ts, 1.3-protection-routes(-authenticated).spec.ts
+      conçues en respectant les sélecteurs/URLs existants mais jamais lancées (DoD E2E décochée).
+      La protection des routes et le tunnel invité ne sont donc pas prouvés de bout en bout.
+    refs:
+      - "tests/e2e/public-booking/4.2-flux-invite.spec.ts"
+      - "tests/e2e/auth/"
+    suggested_owner: dev
+  - id: "SEC-001"
+    severity: medium
+    title: "Rate limiter public toujours absent (carry-over 4.1)"
+    description: >-
+      5.2 sécurise les actions DASHBOARD (requireUser) mais les actions PUBLIQUES
+      (getAvailableSlots, createGuestBooking) restent sans rate-limiter. Hypothèse H1 de la story.
+      Repris et possédé par la story 5.3 (SEC-001).
+    refs:
+      - "app/(public)/[cabinet-slug]/book/actions.ts"
+    suggested_owner: dev
+
+waiver:
+  active: false
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >-
+      Garde d'auth centralisée et systématisée sur le dashboard (grep getUser = 0 hit hors helper),
+      validation UUID avant Prisma, BadRequestError sans fuite, actions publiques explicitement
+      commentées. Le seul manque (rate-limiter public) est hors périmètre 5.2 → story 5.3.
+  performance:
+    status: PASS
+    notes: "Pas d'I/O supplémentaire significative ; requireUser = 1 appel getUser comme avant."
+  reliability:
+    status: CONCERNS
+    notes: "E2E non exécutés ⇒ comportement de protection des routes non prouvé empiriquement."
+  maintainability:
+    status: PASS
+    notes: "Forte réduction de duplication (helper unique), conventions respectées."
+
+recommendations:
+  immediate:
+    - action: "Exécuter les 4 suites E2E 5.2 et consigner le résultat (mutualisable story 5.3 AC 14)"
+      refs: ["tests/e2e/"]
+  future:
+    - action: "Brancher le rate-limiter public (story 5.3)"
+      refs: ["app/(public)/[cabinet-slug]/book/actions.ts"]

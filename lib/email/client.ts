@@ -13,7 +13,22 @@ import type { ReactElement } from "react";
 import { prisma } from "@/lib/prisma";
 import type { MessageType } from "@/lib/generated/prisma/client";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resendClient: Resend | null = null;
+
+/**
+ * Instancie le client Resend à la première utilisation (lazy).
+ *
+ * Évite l'instanciation au chargement du module : sans `RESEND_API_KEY`,
+ * le constructeur Resend throw, ce qui ferait planter tout import transitif
+ * (Server Actions, tests d'intégration) avant même l'exécution. La clé n'est
+ * réellement requise qu'au moment de l'envoi. Aligné sur `lib/sms/client.ts`.
+ */
+function getResend(): Resend {
+  if (!resendClient) {
+    resendClient = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resendClient;
+}
 
 interface SendEmailOptions {
   to: string;
@@ -37,7 +52,7 @@ export async function sendEmail({
   try {
     const from = process.env.EMAIL_FROM ?? "Cabinet Médical <noreply@cabinet.fr>";
     const html = await render(react);
-    const { data, error } = await resend.emails.send({ from, to, subject, html });
+    const { data, error } = await getResend().emails.send({ from, to, subject, html });
 
     if (error) {
       await prisma.messageLog.create({

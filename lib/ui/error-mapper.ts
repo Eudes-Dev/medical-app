@@ -14,7 +14,8 @@ export type ServerErrorCode =
   | "SLOT_TAKEN"
   | "SERVER"
   | "UNAUTHORIZED"
-  | "BAD_REQUEST";
+  | "BAD_REQUEST"
+  | "RATE_LIMITED";
 
 export interface ServerError {
   error?: ServerErrorCode | string;
@@ -30,6 +31,8 @@ export function mapServerErrorToMessage(result: ServerError): string {
       return TOAST_MESSAGES.errors.unauthorized;
     case "BAD_REQUEST":
       return TOAST_MESSAGES.errors.badRequest;
+    case "RATE_LIMITED":
+      return TOAST_MESSAGES.errors.rateLimited;
     case "SERVER":
     default:
       return TOAST_MESSAGES.errors.server;

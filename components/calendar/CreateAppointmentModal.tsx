@@ -1,28 +1,22 @@
 "use client";
 
 /**
- * Modal de création / édition d'un rendez-vous (Story 3.3).
+ * Modal de création / édition d'un rendez-vous (Story 3.3, étendu 7.3).
  *
  * Refonte UI (v2) inspirée de la maquette de référence :
- * - Sections visuelles claires (PATIENT / DATE & CRÉNEAU / DURÉE / TYPE / NOTES)
- *   avec libellés en small-caps tracking-wider façon "form pro".
- * - Pickers date + heure en cartes côte à côte, avec aperçu de l'heure de fin
- *   calculée à partir de la durée sélectionnée.
- * - Sélecteur de durée en "pill segmented control" (15m / 30m / 45m / 1h) avec
- *   badge "Recommandé" sur la valeur conseillée.
- * - Type de consultation : select stylé avec une pastille de couleur (palette
- *   cohérente avec les statuts du calendrier).
- * - Compteur de caractères dynamique sur les notes.
- * - Animations fluides : entrée du dialog (zoom/fade fournis par Radix), fade
- *   des messages d'erreur, transitions sur les contrôles (pill, hover...).
- *
- * Logique métier (validation Zod, server actions, conflits) inchangée.
+ * - Sections visuelles claires (PATIENT / DATE & CRÉNEAU / DURÉE / TYPE / NOTES).
+ * - Pickers date + heure en cartes côte à côte, avec aperçu de l'heure de fin.
+ * - Sélecteur de durée en "pill segmented control".
+ * - Type de soin (story 7.3) : liste **dynamique** des `ServiceType` actifs
+ *   (remplace l'ancienne enum statique `APPOINTMENT_TYPES`), avec pastille de
+ *   couleur. Le choix d'un service pré-remplit la durée (`durationMin`). Les RDV
+ *   legacy (type libre sans service) restent éditables sans perte du libellé.
  *
  * @module components/calendar/CreateAppointmentModal
  */
 
 import * as React from "react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
@@ -47,13 +41,17 @@ import { PatientSelect } from "@/components/calendar/PatientSelect";
 import {
   appointmentSchema,
   APPOINTMENT_DURATIONS,
-  APPOINTMENT_TYPES,
   type AppointmentFormValues,
 } from "@/lib/validations/appointment";
 import {
   createAppointment,
   updateAppointment,
 } from "@/app/dashboard/calendar/actions";
+import {
+  getServiceTypes,
+  type ServiceTypeDTO,
+} from "@/app/dashboard/settings/services/actions";
+import { getServiceColor } from "@/lib/cabinet/service-colors";
 import type { AppointmentWithPatient } from "@/types";
 import { getDurationMinutes } from "@/components/calendar/calendar-utils";
 import { useCalendarStore } from "@/stores/useCalendarStore";
@@ -80,7 +78,6 @@ export interface CreateAppointmentModalProps {
 
 /**
  * Durée "recommandée" par défaut (alignée sur le créneau de la grille = 30 min).
- * Affichée comme badge "Recommandé" pour guider l'utilisateur.
  */
 const RECOMMENDED_DURATION = 30;
 
@@ -90,17 +87,16 @@ const DURATION_LABELS: Record<number, string> = {
   30: "30m",
   45: "45m",
   60: "1h",
+  90: "1h30",
 };
 
-/**
- * Palette de pastilles par type de consultation.
- * On reprend les couleurs du calendrier pour rester cohérent visuellement.
- */
-const TYPE_COLORS: Record<(typeof APPOINTMENT_TYPES)[number], string> = {
-  "Première consultation": "bg-emerald-500",
-  Suivi: "bg-blue-500",
-  Urgence: "bg-rose-500",
-};
+/** Libellé court d'une durée pour les options de la liste de services. */
+function shortDuration(min: number): string {
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const rest = min % 60;
+  return rest === 0 ? `${h} h` : `${h} h ${rest}`;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers de conversion date <-> input HTML
@@ -125,11 +121,7 @@ function toTimeInputString(d: Date): string {
  * Fusionne une chaîne date (YYYY-MM-DD) + heure (HH:mm) en Date locale.
  * Si l'une des deux est invalide on retourne `prev` pour ne pas casser le form.
  */
-function mergeDateAndTime(
-  dateStr: string,
-  timeStr: string,
-  prev: Date,
-): Date {
+function mergeDateAndTime(dateStr: string, timeStr: string, prev: Date): Date {
   const [y, mo, d] = dateStr.split("-").map(Number);
   const [h, mi] = timeStr.split(":").map(Number);
   if ([y, mo, d, h, mi].some((n) => Number.isNaN(n))) return prev;
@@ -140,10 +132,6 @@ function mergeDateAndTime(
 // Sous-composant : libellé "small caps" façon maquette
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Libellé de section dans le formulaire — uppercase + tracking pour lisibilité.
- * Accepte `required` pour afficher l'astérisque rouge.
- */
 function SectionLabel({
   htmlFor,
   required,
@@ -153,7 +141,6 @@ function SectionLabel({
   htmlFor?: string;
   required?: boolean;
   children: React.ReactNode;
-  /** Contenu à droite du libellé (ex: badge "Recommandé", compteur de caractères) */
   right?: React.ReactNode;
 }) {
   return (
@@ -184,6 +171,12 @@ export function CreateAppointmentModal({
   const clearCache = useCalendarStore((s) => s.clearCache);
   const isEdit = Boolean(editAppointment);
 
+  /** Catalogue des services actifs (story 7.3), chargé à l'ouverture. */
+  const [services, setServices] = useState<ServiceTypeDTO[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(false);
+  /** Service sélectionné. `""` = repli / RDV legacy (type libre conservé). */
+  const [selectedServiceId, setSelectedServiceId] = useState<string>("");
+
   // Durée déduite du RDV en édition (sinon valeur par défaut = recommandée).
   const initialDuration = useMemo(() => {
     if (!editAppointment) return RECOMMENDED_DURATION;
@@ -204,6 +197,7 @@ export function CreateAppointmentModal({
     register,
     reset,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<AppointmentFormValues>({
     resolver: zodResolver(appointmentSchema),
@@ -211,27 +205,39 @@ export function CreateAppointmentModal({
       patientId: editAppointment?.patientId ?? "",
       startTime: editAppointment?.startTime ?? defaultStartTime ?? new Date(),
       duration: initialDuration,
-      type:
-        (editAppointment?.type as AppointmentFormValues["type"]) ??
-        "Première consultation",
       notes: editAppointment?.notes ?? "",
     },
   });
 
-  // Valeurs observées pour afficher en direct l'heure de fin et le compteur de notes.
   const watchedStart = watch("startTime");
   const watchedDuration = watch("duration");
   const watchedNotes = watch("notes") ?? "";
-  const watchedType = watch("type");
 
-  /**
-   * Heure de fin = startTime + duration. Recalculée à la volée pour l'aperçu
-   * affiché à droite du time picker (ex: "10:00 → 10:30").
-   */
   const endTime = useMemo(() => {
     if (!(watchedStart instanceof Date)) return null;
     return new Date(watchedStart.getTime() + watchedDuration * 60_000);
   }, [watchedStart, watchedDuration]);
+
+  // Chargement des services actifs à l'ouverture.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setServicesLoading(true);
+    getServiceTypes()
+      .then((all) => {
+        if (cancelled) return;
+        setServices(all.filter((s) => s.active));
+      })
+      .catch(() => {
+        if (!cancelled) setServices([]);
+      })
+      .finally(() => {
+        if (!cancelled) setServicesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   // Réinitialisation à l'ouverture (création) / passage en édition.
   useEffect(() => {
@@ -241,29 +247,61 @@ export function CreateAppointmentModal({
         patientId: editAppointment.patientId,
         startTime: editAppointment.startTime,
         duration: initialDuration,
-        type: editAppointment.type as AppointmentFormValues["type"],
         notes: editAppointment.notes ?? "",
       });
+      setSelectedServiceId(editAppointment.serviceTypeId ?? "");
     } else {
       reset({
         patientId: "",
         startTime: defaultStartTime ?? new Date(),
         duration: RECOMMENDED_DURATION,
-        type: "Première consultation",
         notes: "",
       });
+      setSelectedServiceId("");
     }
   }, [open, defaultStartTime, editAppointment, initialDuration, reset]);
 
-  /**
-   * Soumission : dispatch vers createAppointment ou updateAppointment selon le mode.
-   * Affiche un toast (succès / erreur), purge le cache du store calendrier puis ferme.
-   */
+  // En création, présélectionne le premier service actif et pré-remplit la durée.
+  useEffect(() => {
+    if (!open || editAppointment) return;
+    if (selectedServiceId === "" && services.length > 0) {
+      setSelectedServiceId(services[0].id);
+      setValue("duration", services[0].durationMin as AppointmentFormValues["duration"]);
+    }
+  }, [open, editAppointment, services, selectedServiceId, setValue]);
+
+  const selectedService = services.find((s) => s.id === selectedServiceId);
+  // Option legacy / repli : RDV existant dont le service n'est pas (ou plus)
+  // dans la liste, ou création sans aucun service configuré.
+  const showFallbackOption = !services.some((s) => s.id === selectedServiceId);
+  const fallbackLabel = editAppointment?.type
+    ? `${editAppointment.type} (actuel)`
+    : "Consultation";
+  const dotColor = getServiceColor(selectedService?.color).dot;
+
+  const handleServiceChange = (id: string) => {
+    setSelectedServiceId(id);
+    const svc = services.find((s) => s.id === id);
+    if (svc) {
+      setValue("duration", svc.durationMin as AppointmentFormValues["duration"], {
+        shouldValidate: true,
+      });
+    }
+  };
+
   const onSubmit = useCallback(
     async (values: AppointmentFormValues) => {
-      const action = isEdit && editAppointment
-        ? () => updateAppointment(editAppointment.id, values)
-        : () => createAppointment(values);
+      const svc = services.find((s) => s.id === selectedServiceId);
+      const payload: AppointmentFormValues = {
+        ...values,
+        serviceTypeId: svc ? svc.id : undefined,
+        type: svc ? svc.label : (editAppointment?.type ?? "Consultation"),
+      };
+
+      const action =
+        isEdit && editAppointment
+          ? () => updateAppointment(editAppointment.id, payload)
+          : () => createAppointment(payload);
 
       const result = await action();
 
@@ -277,7 +315,6 @@ export function CreateAppointmentModal({
         onOpenChange(false);
         onSuccess?.();
       } else {
-        // AC 6/16 : message générique, aucun détail interne dans l'UI.
         showError(
           result.error?.includes("occupé")
             ? TOAST_MESSAGES.errors.slotTaken
@@ -285,25 +322,19 @@ export function CreateAppointmentModal({
         );
       }
     },
-    [clearCache, isEdit, editAppointment, onOpenChange, onSuccess],
+    [services, selectedServiceId, clearCache, isEdit, editAppointment, onOpenChange, onSuccess],
   );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/*
-        DialogContent fournit déjà une animation d'entrée (fade + zoom 95%).
-        On élargit légèrement (sm:max-w-lg → 520px) et on retire le gap par
-        défaut pour piloter nous-mêmes l'espacement entre sections.
-      */}
       <DialogContent className="gap-0 p-0 sm:max-w-[520px] overflow-hidden">
-        {/* En-tête : titre + sous-titre */}
         <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle className="text-xl font-semibold tracking-tight">
             {isEdit ? "Modifier le rendez-vous" : "Nouveau rendez-vous"}
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
             {isEdit
-              ? "Mettez à jour l'horaire, le type ou les notes."
+              ? "Mettez à jour l'horaire, le type de soin ou les notes."
               : "Programme d'une consultation"}
           </DialogDescription>
         </DialogHeader>
@@ -312,9 +343,7 @@ export function CreateAppointmentModal({
           onSubmit={handleSubmit(onSubmit)}
           className="flex flex-col gap-5 px-6 pb-2 max-h-[70vh] overflow-y-auto"
         >
-          {/* ───────────────────── Patient ─────────────────────
-              On délègue à PatientSelect (recherche + création) ;
-              on lui passe simplement notre libellé small-caps. */}
+          {/* ───────────────────── Patient ───────────────────── */}
           <Controller
             control={control}
             name="patientId"
@@ -332,14 +361,7 @@ export function CreateAppointmentModal({
             )}
           />
 
-          {/* ───────────────── Date & créneau ─────────────────
-              Deux cartes côte à côte :
-              - une pour la date (avec icône calendrier)
-              - une pour l'heure (avec icône horloge + aperçu de l'heure de fin)
-              Chaque carte enveloppe un input natif (HTML5) caché derrière une
-              UI custom : on conserve l'accessibilité native (clavier, picker
-              système) tout en obtenant un visuel premium.
-          */}
+          {/* ───────────────── Date & créneau ───────────────── */}
           <Controller
             control={control}
             name="startTime"
@@ -349,13 +371,11 @@ export function CreateAppointmentModal({
                 <div className="space-y-2">
                   <SectionLabel required>Date & créneau</SectionLabel>
                   <div className="grid grid-cols-2 gap-2">
-                    {/* Carte date */}
                     <DatePickerCard
                       value={date}
                       onChange={(newDate) => field.onChange(newDate)}
                       hasError={!!errors.startTime}
                     />
-                    {/* Carte heure (avec aperçu de l'heure de fin) */}
                     <TimePickerCard
                       value={date}
                       endTime={endTime}
@@ -376,11 +396,53 @@ export function CreateAppointmentModal({
             }}
           />
 
-          {/* ─────────────────────── Durée ───────────────────────
-              Pill segmented control : chaque durée est un bouton, le choix
-              actif est mis en évidence par un fond emerald + ombre. On utilise
-              setValue (RHF) plutôt qu'un select natif pour le contrôle fin.
-          */}
+          {/* ─────────────── Type de soin (story 7.3) ───────────────
+              Liste dynamique des services actifs ; pastille de couleur du
+              service sélectionné ; le choix pré-remplit la durée. */}
+          <div className="space-y-2">
+            <SectionLabel htmlFor="serviceType">Type de soin</SectionLabel>
+            <div className="relative">
+              <span
+                className={cn(
+                  "absolute left-3 top-1/2 -translate-y-1/2 h-2.5 w-2.5 rounded-full transition-colors duration-200",
+                  dotColor,
+                )}
+                aria-hidden
+              />
+              <select
+                id="serviceType"
+                value={selectedServiceId}
+                onChange={(e) => handleServiceChange(e.target.value)}
+                disabled={servicesLoading}
+                className={cn(
+                  "h-11 w-full appearance-none rounded-lg border bg-background pl-8 pr-9 text-sm shadow-xs transition-colors border-input",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:border-emerald-500",
+                  "disabled:cursor-not-allowed disabled:opacity-60",
+                )}
+              >
+                {(showFallbackOption || services.length === 0) && (
+                  <option value="">{fallbackLabel}</option>
+                )}
+                {services.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label} — {shortDuration(s.durationMin)}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+                aria-hidden
+              />
+            </div>
+            {!servicesLoading && services.length === 0 && !isEdit && (
+              <p className="text-xs text-muted-foreground">
+                Aucun type de soin configuré. La consultation par défaut est
+                utilisée — ajoutez vos types dans Paramètres → Types de soins.
+              </p>
+            )}
+          </div>
+
+          {/* ─────────────────────── Durée ─────────────────────── */}
           <Controller
             control={control}
             name="duration"
@@ -388,9 +450,11 @@ export function CreateAppointmentModal({
               <div className="space-y-2">
                 <SectionLabel
                   right={
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                      Recommandé : {RECOMMENDED_DURATION}m
-                    </span>
+                    selectedService ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                        Soin : {shortDuration(selectedService.durationMin)}
+                      </span>
+                    ) : undefined
                   }
                 >
                   Durée
@@ -398,7 +462,7 @@ export function CreateAppointmentModal({
                 <div
                   role="radiogroup"
                   aria-label="Durée du rendez-vous"
-                  className="relative grid grid-cols-4 gap-1 rounded-full bg-muted/60 p-1"
+                  className="relative grid grid-cols-5 gap-1 rounded-full bg-muted/60 p-1"
                 >
                   {APPOINTMENT_DURATIONS.map((d) => {
                     const active = field.value === d;
@@ -410,12 +474,9 @@ export function CreateAppointmentModal({
                         aria-checked={active}
                         onClick={() => field.onChange(d)}
                         className={cn(
-                          // Base : pilule pleine largeur, transitions sur fond/ombre/couleur
                           "relative z-10 flex h-9 items-center justify-center rounded-full text-sm font-medium transition-all duration-200",
                           active
-                            // État actif : carte emerald avec lift visuel
                             ? "bg-emerald-100 text-emerald-900 shadow-sm dark:bg-emerald-900/50 dark:text-emerald-100"
-                            // État inactif : texte estompé, fond au hover
                             : "text-muted-foreground hover:text-foreground hover:bg-background/60",
                         )}
                       >
@@ -433,57 +494,7 @@ export function CreateAppointmentModal({
             )}
           />
 
-          {/* ─────────────── Type de consultation ───────────────
-              Select natif (accessible) auquel on superpose une pastille de
-              couleur correspondant au type sélectionné. L'icône ChevronDown
-              custom remplace le caret par défaut (appearance-none).
-          */}
-          <div className="space-y-2">
-            <SectionLabel htmlFor="type">Type de consultation</SectionLabel>
-            <div className="relative">
-              {/* Pastille de couleur à gauche, suit le type sélectionné */}
-              <span
-                className={cn(
-                  "absolute left-3 top-1/2 -translate-y-1/2 h-2.5 w-2.5 rounded-full transition-colors duration-200",
-                  TYPE_COLORS[watchedType] ?? "bg-slate-400",
-                )}
-                aria-hidden
-              />
-              <select
-                id="type"
-                {...register("type")}
-                className={cn(
-                  // Padding-left pour laisser la place à la pastille ; padding-right pour le chevron
-                  "h-11 w-full appearance-none rounded-lg border bg-background pl-8 pr-9 text-sm shadow-xs transition-colors",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:border-emerald-500",
-                  errors.type
-                    ? "border-rose-500 focus-visible:ring-rose-500/40"
-                    : "border-input",
-                )}
-                aria-invalid={!!errors.type}
-              >
-                {APPOINTMENT_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
-                aria-hidden
-              />
-            </div>
-            {errors.type?.message && (
-              <p className="text-xs text-rose-500" role="alert">
-                {errors.type.message}
-              </p>
-            )}
-          </div>
-
-          {/* ────────────────── Notes internes ──────────────────
-              Textarea + compteur de caractères dynamique aligné à droite
-              du libellé. Le compteur passe en rouge à l'approche de la limite.
-          */}
+          {/* ────────────────── Notes internes ────────────────── */}
           <div className="space-y-2">
             <SectionLabel
               htmlFor="notes"
@@ -521,7 +532,6 @@ export function CreateAppointmentModal({
           </div>
         </form>
 
-        {/* Footer collant en bas : séparé par une bordure, fond muted léger. */}
         <div className="flex items-center justify-end gap-2 border-t bg-muted/30 px-6 py-4">
           <Button
             type="button"
@@ -538,7 +548,6 @@ export function CreateAppointmentModal({
             isLoading={isSubmitting}
             loadingText={isEdit ? "Enregistrement…" : "Création…"}
             className={cn(
-              // Bouton principal vert (cohérent avec la maquette + statut CONFIRMED)
               "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm",
               "transition-all duration-200 hover:shadow-md",
             )}
@@ -556,11 +565,6 @@ export function CreateAppointmentModal({
 // Sous-composants : pickers date/heure stylés
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Carte affichant la date au format "lun. 18 mai 2026" et superposant un
- * <input type="date"> transparent qui ouvre le picker natif au clic.
- * Conserve l'a11y (tab, espace, picker système, lecteurs d'écran).
- */
 function DatePickerCard({
   value,
   onChange,
@@ -570,13 +574,11 @@ function DatePickerCard({
   onChange: (d: Date) => void;
   hasError: boolean;
 }) {
-  // Format français court : "lun. 18 mai 2026"
   const label = format(value, "EEE d MMM yyyy", { locale: fr });
 
   return (
     <label
       className={cn(
-        // Carte cliquable : padding confortable, hover/focus états
         "relative flex h-11 cursor-pointer items-center gap-2 rounded-lg border bg-background px-3 text-sm shadow-xs transition-all duration-200",
         "hover:border-emerald-500/60 hover:shadow-sm",
         "focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/40",
@@ -585,7 +587,6 @@ function DatePickerCard({
     >
       <CalendarIcon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       <span className="flex-1 truncate font-medium">{label}</span>
-      {/* Input natif transparent par-dessus : récupère les clics et le clavier */}
       <input
         type="date"
         value={toDateInputString(value)}
@@ -604,10 +605,6 @@ function DatePickerCard({
   );
 }
 
-/**
- * Carte affichant l'heure de début + flèche vers l'heure de fin calculée.
- * Même principe que DatePickerCard : input natif transparent superposé.
- */
 function TimePickerCard({
   value,
   endTime,
@@ -633,7 +630,6 @@ function TimePickerCard({
     >
       <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
       <span className="font-medium tabular-nums">{startLabel}</span>
-      {/* Flèche + heure de fin (en muted, ne se sélectionne pas) */}
       <span
         className="ml-auto flex items-center gap-1 text-xs text-muted-foreground tabular-nums"
         aria-hidden

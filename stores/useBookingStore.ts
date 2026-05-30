@@ -22,12 +22,19 @@ export interface BookingState {
   /** Créneau sélectionné (Date : jour + heure de début). `null` si aucun. */
   selectedSlot: Date | null;
   /**
+   * Type de soin sélectionné (story 7.3). `null` = aucun service public
+   * configuré (repli) ou pas encore choisi. Persisté entre les étapes du tunnel.
+   */
+  selectedServiceTypeId: string | null;
+  /**
    * ID du dernier rendez-vous créé. Sert de fallback côté client si le cookie
    * `booking_token` n'est pas encore lisible juste après la redirection.
    */
   lastAppointmentId: string | null;
   /** Définit le créneau sélectionné. Passer `null` pour effacer la sélection. */
   setSelectedSlot: (slot: Date | null) => void;
+  /** Définit le type de soin sélectionné. */
+  setSelectedServiceTypeId: (id: string | null) => void;
   /** Mémorise l'identifiant du RDV juste créé. */
   setLastAppointmentId: (id: string | null) => void;
   /** Réinitialise complètement le store (utile en fin de tunnel). */
@@ -38,10 +45,17 @@ export const useBookingStore = create<BookingState>()(
   persist(
     (set) => ({
       selectedSlot: null,
+      selectedServiceTypeId: null,
       lastAppointmentId: null,
       setSelectedSlot: (slot) => set({ selectedSlot: slot }),
+      setSelectedServiceTypeId: (id) => set({ selectedServiceTypeId: id }),
       setLastAppointmentId: (id) => set({ lastAppointmentId: id }),
-      reset: () => set({ selectedSlot: null, lastAppointmentId: null }),
+      reset: () =>
+        set({
+          selectedSlot: null,
+          selectedServiceTypeId: null,
+          lastAppointmentId: null,
+        }),
     }),
     {
       name: STORAGE_KEY,

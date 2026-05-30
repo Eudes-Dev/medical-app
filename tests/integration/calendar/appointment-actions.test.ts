@@ -35,6 +35,10 @@ vi.mock("@/lib/prisma", () => ({
       update: vi.fn(),
       delete: vi.fn(),
     },
+    // Story 7.3 : résolution du service sélectionné (snapshot label + durée).
+    serviceType: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -302,6 +306,54 @@ describe("Story 3.3 — Gestion des créneaux", () => {
         })
       ).rejects.toThrow(UnauthorizedError);
     });
+
+    // ---- Story 7.3 : service sélectionné → snapshot label + durée réelle ----
+    it("7.3: serviceTypeId résolu → type=label, endTime=start+durationMin, FK persistée", async () => {
+      const serviceId = "77777777-7777-4777-8777-777777777777";
+      vi.mocked(prisma.appointment.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.serviceType.findUnique).mockResolvedValue({
+        label: "Bilan complet",
+        durationMin: 45,
+      } as any);
+      vi.mocked(prisma.appointment.create).mockResolvedValue(
+        appointmentFixture({ id: "svc-apt" }) as any
+      );
+
+      const start = futureDate();
+      const result = await createAppointment({
+        patientId: "11111111-1111-1111-1111-111111111111",
+        startTime: start,
+        duration: 30, // sera ignoré au profit de la durée du service (45)
+        serviceTypeId: serviceId,
+      });
+
+      expect(result.success).toBe(true);
+      const createCall = vi.mocked(prisma.appointment.create).mock.calls[0][0]!;
+      const data = createCall.data as {
+        startTime: Date;
+        endTime: Date;
+        type: string;
+        serviceTypeId?: string;
+      };
+      expect(data.type).toBe("Bilan complet");
+      expect(data.serviceTypeId).toBe(serviceId);
+      expect((data.endTime.getTime() - data.startTime.getTime()) / 60_000).toBe(45);
+    });
+
+    it("7.3: serviceTypeId introuvable → success false sans création", async () => {
+      vi.mocked(prisma.appointment.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.serviceType.findUnique).mockResolvedValue(null);
+
+      const result = await createAppointment({
+        patientId: "11111111-1111-1111-1111-111111111111",
+        startTime: futureDate(),
+        duration: 30,
+        serviceTypeId: "77777777-7777-4777-8777-777777777777",
+      });
+
+      expect(result.success).toBe(false);
+      expect(prisma.appointment.create).not.toHaveBeenCalled();
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -385,6 +437,28 @@ describe("Story 3.3 — Gestion des créneaux", () => {
       }
       expect(prisma.appointment.update).not.toHaveBeenCalled();
     });
+
+    // ---- Story 7.3 : édition d'un RDV legacy (type libre, sans service) ----
+    it("7.3: édition d'un RDV legacy sans service → type snapshot conservé, pas de lookup service", async () => {
+      // RDV legacy : type string, serviceTypeId absent.
+      vi.mocked(prisma.appointment.findUnique).mockResolvedValue(
+        appointmentFixture({ type: "Ancien motif" }) as any
+      );
+      vi.mocked(prisma.appointment.update).mockResolvedValue(
+        appointmentFixture({ type: "Ancien motif", notes: "maj" }) as any
+      );
+
+      const result = await updateAppointment(
+        "33333333-3333-4333-8333-333333333333",
+        { notes: "maj" } // simple édition de notes
+      );
+
+      expect(result.success).toBe(true);
+      // Aucun service à résoudre : le snapshot legacy est préservé.
+      expect(prisma.serviceType.findUnique).not.toHaveBeenCalled();
+      const updateCall = vi.mocked(prisma.appointment.update).mock.calls[0][0]!;
+      expect((updateCall.data as { type: string }).type).toBe("Ancien motif");
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -429,9 +503,14 @@ describe("Story 3.3 — Gestion des créneaux", () => {
       const result = await updateAppointmentStatus("33333333-3333-4333-8333-333333333333", "CONFIRMED");
 
       expect(result.success).toBe(true);
+      // Story 6.x : l'action lit aussi le patient (email + nom) pour pouvoir
+      // déclencher l'email d'annulation — d'où l'`include: { patient }`.
       expect(prisma.appointment.update).toHaveBeenCalledWith({
         where: { id: "33333333-3333-4333-8333-333333333333" },
         data: { status: "CONFIRMED" },
+        include: {
+          patient: { select: { firstName: true, lastName: true, email: true } },
+        },
       });
       expect(revalidatePath).toHaveBeenCalledWith("/dashboard/calendar");
     });
@@ -447,6 +526,9 @@ describe("Story 3.3 — Gestion des créneaux", () => {
       expect(prisma.appointment.update).toHaveBeenCalledWith({
         where: { id: "33333333-3333-4333-8333-333333333333" },
         data: { status: "CANCELLED" },
+        include: {
+          patient: { select: { firstName: true, lastName: true, email: true } },
+        },
       });
     });
 

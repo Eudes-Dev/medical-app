@@ -25,11 +25,13 @@ export default function SettingsPage() {
           title: "Congés & jours fériés",
           description: "Bloquer des journées entières dans l'agenda.",
           storyId: "7.2",
+          href: "/dashboard/settings/timeoff",
         },
         {
           title: "Types de soins",
           description: "Configurer durée, tarif et couleur par type de soin.",
           storyId: "7.3",
+          href: "/dashboard/settings/services",
         },
         {
           title: "Compte praticien",

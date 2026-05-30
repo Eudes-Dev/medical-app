@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import {
   TodayAppointmentsCard,
   UpcomingAppointmentsCard,
@@ -60,18 +60,22 @@ describe("DashboardStats E2E", () => {
 
     vi.mocked(getDashboardStats).mockResolvedValue(mockStats);
 
-    render(<TodayAppointmentsCard />);
-    render(<UpcomingAppointmentsCard />);
+    // Ces composants sont des Server Components async : RTL ne peut pas les
+    // rendre via `<Component />` (« async Client Component »). On les invoque
+    // comme fonctions, on attend le JSX résolu, puis on le rend (pattern RTL
+    // pour async Server Components).
+    render(await TodayAppointmentsCard());
+    render(await UpcomingAppointmentsCard());
 
-    // Attendre que les composants async se chargent
-    await waitFor(() => {
-      expect(getDashboardStats).toHaveBeenCalled();
-    });
+    expect(getDashboardStats).toHaveBeenCalled();
 
-    // Vérifier que les éléments sont présents (les Server Components async
-    // peuvent nécessiter un rendu différent dans les tests)
-    // Pour l'instant, on vérifie que les composants se rendent sans erreur
+    // Carte du jour : titre + compteur.
     expect(screen.getByText(/Rendez-vous aujourd/)).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
+
+    // Carte des prochains RDV : les patients mockés sont listés.
+    expect(screen.getByText("Jean Martin")).toBeInTheDocument();
+    expect(screen.getByText("Marie Dupont")).toBeInTheDocument();
   });
 
   it("devrait appeler getDashboardStats lors du rendu", async () => {
@@ -82,10 +86,8 @@ describe("DashboardStats E2E", () => {
 
     vi.mocked(getDashboardStats).mockResolvedValue(mockStats);
 
-    render(<TodayAppointmentsCard />);
+    render(await TodayAppointmentsCard());
 
-    await waitFor(() => {
-      expect(getDashboardStats).toHaveBeenCalled();
-    });
+    expect(getDashboardStats).toHaveBeenCalled();
   });
 });

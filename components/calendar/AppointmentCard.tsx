@@ -20,6 +20,7 @@ import { Check, CheckCheck, Clock, XCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { AppointmentStatus, AppointmentWithPatient } from "@/types";
+import { getServiceColor } from "@/lib/cabinet/service-colors";
 import {
   calculateTop,
   getDurationMinutes,
@@ -93,11 +94,14 @@ const STATUS_STYLES: Record<
  * Hauteur fixe = CARD_HEIGHT_PX. Position verticale = heure de début.
  */
 export function AppointmentCard({ appointment, onSelect }: AppointmentCardProps) {
-  const { patient, startTime, endTime, status, type } = appointment;
+  const { patient, startTime, endTime, status, type, serviceColor } = appointment;
   const durationMinutes = getDurationMinutes(startTime, endTime);
   const top = calculateTop(startTime);
   const styles = STATUS_STYLES[status] ?? STATUS_STYLES.COMPLETED;
   const StatusIcon = styles.Icon;
+  // Accent secondaire (story 7.3) : pastille de couleur du service par-dessus le
+  // fond de statut. Rendu uniquement si le RDV est rattaché à un service.
+  const serviceDot = serviceColor ? getServiceColor(serviceColor).dot : null;
 
   // Nom complet du patient (avec fallback si données manquantes)
   const fullName = `${patient.firstName} ${patient.lastName}`.trim() || "Patient";
@@ -140,6 +144,14 @@ export function AppointmentCard({ appointment, onSelect }: AppointmentCardProps)
       aria-label={`Rendez-vous ${fullName} de ${timeRange}, ${durationLabel}, statut ${status}`}
       title={`${fullName} · ${timeRange} · ${type ?? ""}`.trim()}
     >
+      {/* Pastille couleur du service (accent secondaire ; le statut reste dominant) */}
+      {serviceDot && (
+        <span
+          className={cn("size-1.5 shrink-0 rounded-full", serviceDot)}
+          aria-hidden
+        />
+      )}
+
       {/* Heure de début, en gras et tabulaire (pour alignement vertical des cartes) */}
       <span className="shrink-0 text-[10px] font-bold tabular-nums opacity-80">
         {startLabel}

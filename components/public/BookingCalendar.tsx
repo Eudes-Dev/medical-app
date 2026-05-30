@@ -30,6 +30,11 @@ import { EmptyState as GenericEmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 import { useBookingStore } from "@/stores/useBookingStore";
 import { getAvailableSlots } from "@/app/(public)/[cabinet-slug]/book/actions";
+import {
+  getPublicServiceTypes,
+  type PublicServiceDTO,
+} from "@/app/dashboard/settings/services/actions";
+import { ServiceSelector } from "@/components/public/ServiceSelector";
 
 const DAYS_AHEAD = 14;
 
@@ -42,6 +47,13 @@ export function BookingCalendar({ cabinetSlug }: BookingCalendarProps) {
   const router = useRouter();
   const selectedSlot = useBookingStore((s) => s.selectedSlot);
   const setSelectedSlot = useBookingStore((s) => s.setSelectedSlot);
+  const selectedServiceTypeId = useBookingStore((s) => s.selectedServiceTypeId);
+  const setSelectedServiceTypeId = useBookingStore(
+    (s) => s.setSelectedServiceTypeId,
+  );
+
+  /** Services publics (story 7.3). `null` = chargement en cours. */
+  const [services, setServices] = useState<PublicServiceDTO[] | null>(null);
 
   const today = useMemo(() => startOfToday(), []);
   const [selectedDate, setSelectedDate] = useState<Date>(today);
@@ -56,15 +68,55 @@ export function BookingCalendar({ cabinetSlug }: BookingCalendarProps) {
     [today],
   );
 
+  // Chargement des services publics (story 7.3). Liste vide ⇒ pas d'étape motif
+  // (repli serveur « Première consultation »).
+  useEffect(() => {
+    let cancelled = false;
+    getPublicServiceTypes()
+      .then((list) => {
+        if (!cancelled) setServices(list);
+      })
+      .catch(() => {
+        if (!cancelled) setServices([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Présélection automatique quand un seul service public est proposé.
+  useEffect(() => {
+    if (services && services.length === 1 && !selectedServiceTypeId) {
+      setSelectedServiceTypeId(services[0].id);
+    }
+  }, [services, selectedServiceTypeId, setSelectedServiceTypeId]);
+
+  const hasServices = (services?.length ?? 0) > 0;
+  const selectedService =
+    services?.find((s) => s.id === selectedServiceTypeId) ?? null;
+  /** Durée affichée dans le récap : durée du service choisi, sinon 30 min. */
+  const recapDuration = selectedService
+    ? selectedService.durationMin < 60
+      ? `${selectedService.durationMin} min`
+      : `${Math.floor(selectedService.durationMin / 60)} h${selectedService.durationMin % 60 ? ` ${selectedService.durationMin % 60}` : ""}`
+    : "30 min";
+  /** On exige un motif uniquement si des services publics existent (AC 3). */
+  const canContinue = !!selectedSlot && (!hasServices || !!selectedServiceTypeId);
+
   useEffect(() => {
     let cancelled = false;
     startTransition(async () => {
       const result = await getAvailableSlots({ date: selectedDate });
       if (cancelled) return;
       if ("error" in result) {
-        setError(result.error);
+        // `RATE_LIMITED` (story 5.3) : message neutre dédié ; sinon message serveur.
+        const isRateLimited = result.error === "RATE_LIMITED";
+        const message = isRateLimited
+          ? TOAST_MESSAGES.errors.rateLimited
+          : TOAST_MESSAGES.errors.server;
+        setError(message);
         setSlots([]);
-        showError(TOAST_MESSAGES.errors.server);
+        showError(message);
         return;
       }
       setError(null);
@@ -85,7 +137,7 @@ export function BookingCalendar({ cabinetSlug }: BookingCalendarProps) {
   };
 
   const handleContinue = () => {
-    if (!selectedSlot) return;
+    if (!canContinue) return;
     router.push(`/${cabinetSlug}/book/guest`);
   };
 
@@ -96,6 +148,25 @@ export function BookingCalendar({ cabinetSlug }: BookingCalendarProps) {
   return (
     <>
       <div className="space-y-9 pb-32">
+        {/* Motif (story 7.3) — affiché uniquement si des services publics existent */}
+        {hasServices && services && (
+          <section aria-labelledby="service-picker-title">
+            <div className="mb-3.5 flex items-baseline justify-between gap-3">
+              <h2
+                id="service-picker-title"
+                className="text-[13px] font-semibold tracking-[0.06em] text-slate-700 uppercase"
+              >
+                Motif
+              </h2>
+            </div>
+            <ServiceSelector
+              services={services}
+              selectedId={selectedServiceTypeId}
+              onSelect={setSelectedServiceTypeId}
+            />
+          </section>
+        )}
+
         {/* Date rail */}
         <section aria-labelledby="date-picker-title">
           <div className="mb-3.5 flex items-baseline justify-between gap-3">
@@ -210,7 +281,12 @@ export function BookingCalendar({ cabinetSlug }: BookingCalendarProps) {
                     {format(selectedSlot, "EEEE d MMMM", { locale: fr })}
                   </span>
                   <span className="mt-[3px] truncate text-[12.5px] tabular-nums text-slate-500">
-                    à <strong className="font-semibold text-slate-900">{format(selectedSlot, "HH:mm")}</strong> · 30 min
+                    à <strong className="font-semibold text-slate-900">{format(selectedSlot, "HH:mm")}</strong> · {recapDuration}
+                    {hasServices && !selectedServiceTypeId && (
+                      <span className="ml-1 font-medium normal-case text-amber-600">
+                        — choisissez un motif
+                      </span>
+                    )}
                   </span>
                 </div>
               </>
@@ -232,19 +308,21 @@ export function BookingCalendar({ cabinetSlug }: BookingCalendarProps) {
           </div>
           <button
             type="button"
-            disabled={!selectedSlot}
+            disabled={!canContinue}
             onClick={handleContinue}
             className={cn(
               "group inline-flex h-12 shrink-0 items-center gap-2 rounded-full pr-[18px] pl-[22px] text-[15px] font-semibold tracking-[-0.005em] transition-all",
               "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600",
-              selectedSlot
+              canContinue
                 ? "bg-blue-600 text-white shadow-[0_8px_22px_-8px_rgba(37,99,235,0.45),0_2px_6px_-2px_rgba(37,99,235,0.3)] hover:-translate-y-px hover:bg-blue-700 active:translate-y-0"
                 : "cursor-not-allowed bg-slate-200 text-slate-400",
             )}
             aria-label={
-              selectedSlot
-                ? `Continuer avec le créneau du ${format(selectedSlot, "EEEE d MMMM 'à' HH:mm", { locale: fr })}`
-                : "Sélectionnez un créneau pour continuer"
+              canContinue
+                ? `Continuer avec le créneau du ${format(selectedSlot!, "EEEE d MMMM 'à' HH:mm", { locale: fr })}`
+                : hasServices && selectedSlot && !selectedServiceTypeId
+                  ? "Sélectionnez un motif pour continuer"
+                  : "Sélectionnez un créneau pour continuer"
             }
           >
             <span>Continuer</span>

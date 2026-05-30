@@ -1,0 +1,140 @@
+schema: 1
+story: "7.2"
+story_title: "Congés et jours fériés"
+gate: CONCERNS
+status_reason: >-
+  Implémentation conforme aux 10 ACs, 85/85 tests verts (46 unitaires + 39 intégration, dont 5
+  nouveaux sur le tunnel public), tsc et eslint propres sur tous les fichiers 7.2. Aucun défaut
+  propre à 7.2 n'est bloquant — les findings spécifiques (REL-002, MAINT-001, TEST-001) sont
+  tous LOW. Gate CONCERNS uniquement à cause des deux NFR carry-over 4.1/4.2/7.1 toujours
+  bloquants pour la prod : TZ serveur sur la génération de créneaux (REL-001) et rate limiter
+  public absent (SEC-001).
+reviewer: "Quinn (Test Architect)"
+updated: "2026-05-28T01:10:00Z"
+expires: "2026-06-11T01:10:00Z"
+# Passe 2 (re-vérification à la demande, code inchangé depuis la passe 1) :
+# 85/85 tests verts re-confirmés, tsc/eslint propres, findings inchangés.
+
+quality_score: 80
+
+evidence:
+  tests_reviewed: 85
+  risks_identified: 5
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 8, 10]
+    ac_gaps: [7, 9] # États UI & a11y/responsive : non couverts par tests automatisés (déféré E2E, carry-over 7.1)
+
+top_issues:
+  - id: "REL-001"
+    severity: medium
+    title: "Génération de créneaux dépendante de la TZ serveur (carry-over 4.1/4.2/7.1)"
+    description: >-
+      generateDaySlots (lib/cabinet/slots.ts:63) utilise setHours en heure locale. Sur runtime
+      UTC (Vercel) un créneau "10:00" affiché correspondra à 12:00 (été) / 11:00 (hiver) heure
+      de Paris. La 7.2 hérite du défaut SANS l'aggraver : la comparaison calendaire dayKey()
+      introduite ici est elle-même insensible à l'heure et donc robuste tant que `date` et les
+      bornes désignent le même jour local. À fixer transversalement (date-fns-tz Europe/Paris)
+      avant mise en production.
+    refs:
+      - "lib/cabinet/slots.ts:63"
+    suggested_owner: dev
+  - id: "SEC-001"
+    severity: medium
+    title: "Rate limiter absent sur Server Action publique (carry-over 4.1)"
+    description: >-
+      getAvailableSlots reste une action non authentifiée exposée publiquement. La 7.2 y ajoute
+      1 requête supplémentaire (prisma.timeOff.findMany) en parallèle des appointments,
+      augmentant marginalement le coût d'un scraping/DoS applicatif. Le TODO story 13.5 est en
+      place mais non câblé. Pré-existant, non régressé.
+    refs:
+      - "app/(public)/[cabinet-slug]/book/actions.ts:97-120"
+    suggested_owner: dev
+  - id: "REL-002"
+    severity: low
+    title: "createTimeOff : findMany hors transaction (TOC/TOU mineur)"
+    description: >-
+      Le calcul des `impacted` (prisma.appointment.findMany lignes 306-314) s'exécute HORS de
+      la transaction qui suit. Une nouvelle réservation entre le fetch et l'écriture
+      transactionnelle ne serait pas annulée par `notifyCancellations=true`. Mitigation
+      existante : une fois la TimeOff active, le tunnel public refuse toute nouvelle
+      réservation sur le créneau (AC 6, défense en profondeur testée). Impact pratique faible.
+      Recommandation : déplacer le findMany dans `$transaction` par cohérence stricte.
+    refs:
+      - "app/dashboard/settings/timeoff/actions.ts:306-348"
+    suggested_owner: dev
+  - id: "MAINT-001"
+    severity: low
+    title: "Filtre `impacted` dupliqué entre preview et create"
+    description: >-
+      Le filtre des RDV impactés est implémenté à l'identique dans previewTimeOffImpact
+      (lignes 239-249) et createTimeOff (lignes 315-324). Si les règles évoluent (ex. fenêtre
+      avec marge H+2), la dérive est probable. Extraction d'un helper privé
+      `filterImpactedAppointments(candidates, v)` recommandée.
+    refs:
+      - "app/dashboard/settings/timeoff/actions.ts:239-324"
+    suggested_owner: dev
+  - id: "TEST-001"
+    severity: low
+    title: "AC 7 (états UI) et AC 9 (a11y/responsive) non automatisés (carry-over 7.1)"
+    description: >-
+      Les composants client (TimeOffManager, TimeOffForm, TimeOffImpactWarning, HolidayList)
+      utilisent correctement Skeleton, EmptyState, useTransition et sonner — visuellement
+      conformes — mais ne sont pas couverts par tests composant. À mutualiser avec le E2E
+      Playwright tunnel (poser un congé → 0 créneau sur /book à cette date → suppression →
+      réapparition). Couvert par le TODO Playwright global du projet.
+    refs:
+      - "components/settings/timeoff-manager.tsx"
+      - "components/settings/timeoff-form.tsx"
+      - "components/settings/timeoff-impact-warning.tsx"
+    suggested_owner: dev
+
+waiver:
+  active: false
+
+nfr_validation:
+  security:
+    status: CONCERNS
+    notes: >-
+      requireUser sur les 6 Server Actions (testé UnauthorizedError), défense en profondeur
+      côté tunnel (createGuestBooking rejette via TimeOff, testé), assertValidUuid sur
+      toggleHoliday/deleteTimeOff, catch générique sans fuite, select Prisma restreint.
+      RGPD : reason est text libre (200 max) côté praticien — donnée de configuration.
+      Rate limiter public manquant (SEC-001, carry-over 4.1).
+  performance:
+    status: PASS
+    notes: >-
+      Index @@index([startDate, endDate]), select restreints aux champs utiles, Promise.all
+      pour les requêtes parallèles (appointments + timeOff) dans getAvailableSlots,
+      ensureHolidaysMaterialized idempotent (1 SELECT + 1 INSERT max/année).
+  reliability:
+    status: CONCERNS
+    notes: >-
+      Transaction pour create + cancel des RDV impactés ; emails fire-and-forget (réutilisation
+      sendCancellationEmail 6.1). TOC/TOU mineur entre le fetch impacted et la transaction
+      (REL-002, atténué par défense en profondeur). Risque TZ serveur sur la génération
+      hérité (REL-001).
+  maintainability:
+    status: PASS
+    notes: >-
+      Helpers purs isolés (holidays.ts, time-off.ts) sans dépendance Prisma. Refactor minimal
+      et NON-RÉGRESSIF du générateur (4ᵉ paramètre optionnel timeOffs=[]). JSDoc dense.
+      Catalogue toasts étendu (TOAST_MESSAGES.timeOff). Duplication mineure du filtre impacted
+      (MAINT-001).
+
+recommendations:
+  immediate: # À traiter avant mise en production
+    - action: "Forcer Europe/Paris à la génération des créneaux (date-fns-tz) — transverse 4.1/4.2/7.1"
+      refs: ["lib/cabinet/slots.ts"]
+    - action: "Brancher le rate limiter (story 13.5) sur getAvailableSlots et createGuestBooking"
+      refs: ["app/(public)/[cabinet-slug]/book/actions.ts"]
+    - action: "Appliquer la migration en prod (prisma migrate deploy) — pas de seed nécessaire (fériés matérialisés à la demande)"
+      refs: ["prisma/migrations/20260527000004_add_time_off/migration.sql"]
+  future: # Peut être traité plus tard
+    - action: "Déplacer le findMany impacted dans la $transaction de createTimeOff (REL-002)"
+      refs: ["app/dashboard/settings/timeoff/actions.ts:306-348"]
+    - action: "Extraire `filterImpactedAppointments` pour éliminer la duplication (MAINT-001)"
+      refs: ["app/dashboard/settings/timeoff/actions.ts:239-324"]
+    - action: "E2E Playwright : poser un congé → /book → 0 créneau → suppression → réapparition (couvre AC 7 & 9)"
+      refs: ["tests/e2e/"]
+    - action: "Composant test (RTL) du TimeOffForm : flux préview → confirmation → création"
+      refs: ["components/settings/timeoff-form.tsx"]

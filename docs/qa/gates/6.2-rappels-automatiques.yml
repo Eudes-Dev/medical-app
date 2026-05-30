@@ -1,0 +1,79 @@
+schema: 1
+story: "6.2"
+story_title: "Rappels automatiques de rendez-vous"
+gate: CONCERNS
+status_reason: >-
+  Implémentation conforme aux 5 ACs : route cron protégée par CRON_SECRET, logique D-1 (17h UTC)
+  et H-2 (fenêtre glissante ±10 min), idempotence par reminderD1SentAt/reminderH2SentAt, opt-out
+  patient (optOutToken + page /unsubscribe), exclusion CANCELLED/COMPLETED. 11 tests d'intégration
+  verts avec vi.setSystemTime. Gate CONCERNS pour deux raisons : (1) la fenêtre D-1 à 17h UTC vaut
+  18h Paris en hiver mais 19h en été (REL-001, drift TZ assumé par la story comme acceptable MVP) ;
+  (2) le cron Vercel n'est pas déployé (dépend de l'infra 13.x descopée).
+reviewer: "Sarah (PO) — gate rétro-créée"
+updated: "2026-05-30T00:00:00Z"
+expires: "2026-06-13T00:00:00Z"
+
+quality_score: 80
+
+evidence:
+  tests_reviewed: 11
+  risks_identified: 3
+  trace:
+    ac_covered: [1, 2, 3, 4, 5]
+    ac_gaps: [] # tous les AC couverts par tests d'intégration
+
+top_issues:
+  - id: "REL-001"
+    severity: medium
+    title: "Fenêtre D-1 cron en heure UTC fixe (drift saisonnier, carry-over)"
+    description: >-
+      Le cron à 17h UTC = 18h Paris (CET hiver) mais 19h Paris (CEST été). Le rappel J-1 n'est donc
+      pas envoyé à heure constante côté patient. Acceptable MVP selon la story ; à rendre
+      timezone-aware (date-fns-tz Europe/Paris) dans le cadre de la consolidation TZ (story 5.3).
+    refs:
+      - "app/api/cron/reminders/route.ts"
+    suggested_owner: dev
+  - id: "OPS-CRON-001"
+    severity: medium
+    title: "Cron Vercel non déployé (vercel.json créé, infra 13.x descopée)"
+    description: >-
+      vercel.json est livré mais l'activation effective du cron dépend du déploiement Vercel
+      (épopée 13, backlog post-MVP). Sans déploiement, aucun rappel réel n'est envoyé.
+    refs:
+      - "vercel.json"
+    suggested_owner: po
+  - id: "REMIND-FLAG-001"
+    severity: low
+    title: "sentAt marqué même en cas d'échec d'envoi"
+    description: >-
+      Choix MVP assumé : reminderD1SentAt/H2SentAt sont posés après le lancement fire-and-forget,
+      même si l'email échoue (évite les boucles). MessageLog (FAILED) permet l'audit. À surveiller
+      si le taux d'échec Resend devient significatif.
+    refs:
+      - "app/api/cron/reminders/route.ts"
+    suggested_owner: dev
+
+waiver:
+  active: false
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "Route cron protégée par Authorization: Bearer CRON_SECRET (401 sinon). optOutToken UUID opaque."
+  performance:
+    status: PASS
+    notes: "Requêtes bornées par fenêtre + flags IS NULL ; fire-and-forget non bloquant."
+  reliability:
+    status: CONCERNS
+    notes: "Idempotence garantie par les flags ; drift TZ saisonnier (REL-001) ; cron non déployé (OPS-CRON-001)."
+  maintainability:
+    status: PASS
+    notes: "Réutilise lib/email/client.ts + format.ts (6.1) ; algorithmes D-1/H-2 documentés."
+
+recommendations:
+  immediate:
+    - action: "Rendre la fenêtre D-1 timezone-aware (Europe/Paris) — story 5.3 REL-001"
+      refs: ["app/api/cron/reminders/route.ts"]
+  future:
+    - action: "Déployer le cron Vercel lors de l'épopée 13 (déploiement)"
+      refs: ["vercel.json"]

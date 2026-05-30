@@ -1,0 +1,65 @@
+schema: 1
+story: "3.6"
+story_title: "Dette technique — Runner E2E Calendrier"
+gate: CONCERNS
+status_reason: >-
+  Runner Playwright livré et complet (config desktop+mobile, global-setup reset DB + auth +
+  storageState, seed E2E, 11 scénarios couvrant 3.1/3.2/3.3, README, réorganisation
+  tests/e2e→tests/component). Implémentation conforme aux 9 ACs. Gate CONCERNS car les specs
+  Playwright n'ont JAMAIS été exécutées (AC7 "mode différé" : exécution manuelle requise tant
+  que la CI 13.1 — descopée — n'existe pas). La couverture E2E est donc présente en code mais
+  NON VÉRIFIÉE. À exécuter au moins une fois (tracé dans story 5.3 AC 14).
+reviewer: "Sarah (PO) — gate rétro-créée"
+updated: "2026-05-30T00:00:00Z"
+expires: "2026-06-13T00:00:00Z"
+
+quality_score: 75
+
+evidence:
+  tests_reviewed: 11
+  risks_identified: 3
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 8, 9]
+    ac_gaps: [7] # CI différée (13.1 descopée) — exécution manuelle seulement
+
+top_issues:
+  - id: "E2E-EXEC-001"
+    severity: medium
+    title: "Les 11 scénarios Playwright n'ont jamais été exécutés"
+    description: >-
+      Le runner est livré mais l'exécution réelle nécessite .env.test + Postgres medical_app_test
+      + npx playwright install. Tant que ce n'est pas fait, AC4/AC5/AC6 (persistance Zustand,
+      vues calendrier, gestion créneaux) restent non prouvés. Risque de specs rouges latentes.
+    refs:
+      - "tests/e2e/calendar/"
+    suggested_owner: dev
+  - id: "CI-001"
+    severity: medium
+    title: "Aucune intégration CI (story 13.1 descopée)"
+    description: >-
+      AC7 figé en "mode différé". Le follow-up docs/backlog/follow-up-3.6-13.1-ci-e2e-calendar.md
+      pointe vers 13.1, désormais reclassée backlog post-MVP. La non-régression du module agenda
+      n'est donc pas garantie automatiquement.
+    refs:
+      - "docs/backlog/follow-up-3.6-13.1-ci-e2e-calendar.md"
+    suggested_owner: po
+  - id: "TEST-BASELINE-001"
+    severity: low
+    title: "Tests pré-existants rouges signalés mais non corrigés"
+    description: >-
+      Debug Log 3.6 note use-debounce ×4 et dashboard-stats ×1 rouges sur main avant la story.
+      Repris et possédés par la story 5.3 (TEST-BASELINE-001).
+    refs:
+      - "docs/dette/2026-05-16-tests-residuels-suite-vitest.md"
+    suggested_owner: dev
+
+waiver:
+  active: false
+
+recommendations:
+  immediate:
+    - action: "Exécuter npm run test:e2e en local, consigner le résultat (story 5.3 AC 14)"
+      refs: ["tests/e2e/"]
+  future:
+    - action: "Câbler le job e2e-calendar en CI lors de 13.1 (follow-up déjà rédigé)"
+      refs: ["docs/backlog/follow-up-3.6-13.1-ci-e2e-calendar.md"]
