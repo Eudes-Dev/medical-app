@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { sendEmail } from "./client";
+import { getCabinetEmailInfo } from "./cabinet-info";
 import { ReminderD1Email } from "./templates/ReminderD1Email";
 import { ReminderH2Email } from "./templates/ReminderH2Email";
 
@@ -13,6 +14,7 @@ interface SendReminderParams {
 }
 
 export async function sendReminderD1(params: SendReminderParams): Promise<void> {
+  const cabinet = await getCabinetEmailInfo();
   await sendEmail({
     to: params.patientEmail,
     subject: "Rappel : votre rendez-vous de demain",
@@ -21,6 +23,7 @@ export async function sendReminderD1(params: SendReminderParams): Promise<void> 
       appointmentDate: params.appointmentDate,
       appointmentType: params.appointmentType,
       optOutToken: params.optOutToken,
+      cabinet,
     }),
     appointmentId: params.appointmentId,
     type: "REMINDER_D1",
@@ -28,6 +31,7 @@ export async function sendReminderD1(params: SendReminderParams): Promise<void> 
 }
 
 export async function sendReminderH2(params: SendReminderParams): Promise<void> {
+  const cabinet = await getCabinetEmailInfo();
   await sendEmail({
     to: params.patientEmail,
     subject: "Rappel : votre rendez-vous dans 2 heures",
@@ -36,6 +40,7 @@ export async function sendReminderH2(params: SendReminderParams): Promise<void> 
       appointmentDate: params.appointmentDate,
       appointmentType: params.appointmentType,
       optOutToken: params.optOutToken,
+      cabinet,
     }),
     appointmentId: params.appointmentId,
     type: "REMINDER_H2",

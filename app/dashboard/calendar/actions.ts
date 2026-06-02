@@ -206,10 +206,16 @@ export async function createAppointment(
     if (serviceTypeId) {
       const service = await prisma.serviceType.findUnique({
         where: { id: serviceTypeId },
-        select: { label: true, durationMin: true },
+        select: { label: true, durationMin: true, active: true },
       });
       if (!service) {
         return { success: false, error: "Type de soin introuvable." };
+      }
+      // Story 7.3 (SEC-002) : défense en profondeur dashboard — un service
+      // archivé (active=false) ne doit pas être rattaché à un nouveau RDV,
+      // même par un acteur de confiance via un client obsolète.
+      if (!service.active) {
+        return { success: false, error: "Ce type de soin est archivé et n'est plus disponible." };
       }
       snapshotType = service.label;
       durationMin = service.durationMin;
@@ -298,10 +304,16 @@ export async function updateAppointment(
     if (data.serviceTypeId) {
       const service = await prisma.serviceType.findUnique({
         where: { id: data.serviceTypeId },
-        select: { label: true, durationMin: true },
+        select: { label: true, durationMin: true, active: true },
       });
       if (!service) {
         return { success: false, error: "Type de soin introuvable." };
+      }
+      // Story 7.3 (SEC-002) : on refuse de (re)rattacher un service archivé.
+      // Le snapshot `type` legacy reste préservé tant qu'aucun service valide
+      // n'est sélectionné (aucune perte d'historique).
+      if (!service.active) {
+        return { success: false, error: "Ce type de soin est archivé et n'est plus disponible." };
       }
       serviceTypeId = data.serviceTypeId;
       type = service.label;

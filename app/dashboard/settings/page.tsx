@@ -14,6 +14,7 @@ export default function SettingsPage() {
           title: "Profil cabinet public",
           description: "Présentation, photos, adresse, accès.",
           storyId: "7.4",
+          href: "/dashboard/settings/profile",
         },
         {
           title: "Horaires d'ouverture",

@@ -31,9 +31,11 @@ import { Button } from "@/components/ui/button";
 interface HeroSectionProps {
   /** Slug du cabinet — utilisé pour construire le lien vers le tunnel. */
   slug: string;
+  /** Nom du cabinet (profil persisté, story 7.4) — remplace l'ancienne chaîne en dur. */
+  cabinetName: string;
 }
 
-export function HeroSection({ slug }: HeroSectionProps) {
+export function HeroSection({ slug, cabinetName }: HeroSectionProps) {
   return (
     <section
       aria-labelledby="hero-title"
@@ -70,7 +72,7 @@ export function HeroSection({ slug }: HeroSectionProps) {
           {/* Sous-titre ----------------------------------------------- */}
           <p className="anim-fade-up anim-delay-200 max-w-lg text-base text-muted-foreground md:text-lg">
             Prenez rendez-vous en quelques secondes avec l&apos;équipe médicale du{" "}
-            <span className="font-medium text-foreground">Cabinet Rive Gauche</span>.
+            <span className="font-medium text-foreground">{cabinetName}</span>.
             Une organisation pensée pour réduire votre temps d&apos;attente.
           </p>
 

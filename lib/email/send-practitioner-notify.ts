@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { sendEmail } from "./client";
+import { getCabinetEmailInfo } from "./cabinet-info";
 import { PractitionerNotifyEmail } from "./templates/PractitionerNotifyEmail";
 
 interface SendPractitionerNotifyParams {
@@ -21,6 +22,7 @@ export async function sendPractitionerNotify(
     return;
   }
 
+  const cabinet = await getCabinetEmailInfo();
   await sendEmail({
     to,
     subject: `Nouveau RDV — ${params.patientFirstName} ${params.patientLastName}`,
@@ -31,6 +33,7 @@ export async function sendPractitionerNotify(
       patientEmail: params.patientEmail,
       appointmentDate: params.appointmentDate,
       appointmentType: params.appointmentType,
+      cabinet,
     }),
     appointmentId: params.appointmentId,
     type: "PRACTITIONER_NOTIFY",

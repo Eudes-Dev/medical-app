@@ -70,7 +70,7 @@
 | 7.1 | Configuration des horaires d'ouverture | 🔵 Ready for Review — gate CONCERNS (TZ, rate-limit → **5.3**) |
 | 7.2 | Congés & jours fériés | 🔵 Ready for Review — gate CONCERNS (idem) |
 | 7.3 | Types de soins paramétrables | 🔵 Ready for Review — gate QA à produire |
-| 7.4 | Profil cabinet public | 📦 **Backlog post-MVP** (supprimée) — *hand-off 7.1 : dériver le label horaires public depuis `WorkingHours`* |
+| 7.4 | Profil cabinet public | 🔵 Ready for Review — *hand-off 7.1 clos (label horaires dérivé de `WorkingHours`) + `CABINET_INFO`/« Cabinet Rive Gauche » codés en dur supprimés des surfaces publiques ; e-mails migrés sur le profil persisté* |
 
 ---
 

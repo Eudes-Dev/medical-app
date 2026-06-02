@@ -19,6 +19,13 @@ const { mockSendEmail } = vi.hoisted(() => ({
 
 vi.mock("@/lib/email/client", () => ({ sendEmail: mockSendEmail }));
 
+// Story 7.4 : la couche d'envoi lit le profil cabinet (props injectées aux
+// templates). Mock du lecteur pour éviter tout accès Prisma en test unitaire.
+const CABINET = { name: "Cabinet Test", address: "1 rue Test", phone: "01 00 00 00 00" };
+vi.mock("@/lib/email/cabinet-info", () => ({
+  getCabinetEmailInfo: vi.fn().mockResolvedValue(CABINET),
+}));
+
 const { sendConfirmationEmail } = await import("@/lib/email/send-confirmation");
 
 describe("sendConfirmationEmail", () => {
@@ -58,6 +65,7 @@ describe("sendConfirmationEmail", () => {
       cancellationToken: "token-uuid-abc",
       cabinetSlug: "cabinet",
       appointmentType: "Première consultation",
+      cabinet: CABINET,
     });
   });
 

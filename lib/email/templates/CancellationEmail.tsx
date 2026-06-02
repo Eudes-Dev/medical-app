@@ -9,24 +9,26 @@ import {
   Preview,
   Section,
 } from "@react-email/components";
-import { CABINET_INFO } from "@/lib/cabinet/config";
+import type { CabinetEmailInfo } from "@/lib/email/cabinet-info";
 import { formatDate } from "./format";
 
 interface CancellationEmailProps {
   patientFirstName: string;
   appointmentDate: Date;
   appointmentType: string;
+  cabinet: CabinetEmailInfo;
 }
 
 export function CancellationEmail({
   patientFirstName,
   appointmentDate,
   appointmentType,
+  cabinet,
 }: CancellationEmailProps) {
   return (
     <Html lang="fr">
       <Head />
-      <Preview>Annulation de votre rendez-vous — {CABINET_INFO.name}</Preview>
+      <Preview>Annulation de votre rendez-vous — {cabinet.name}</Preview>
       <Body style={{ backgroundColor: "#f9fafb", fontFamily: "Arial, sans-serif" }}>
         <Container style={{ maxWidth: "600px", margin: "0 auto", padding: "24px" }}>
           <Heading style={{ color: "#111827", fontSize: "24px" }}>
@@ -51,12 +53,12 @@ export function CancellationEmail({
 
           <Text style={{ color: "#374151", marginTop: "24px" }}>
             Si vous souhaitez prendre un nouveau rendez-vous, n&apos;hésitez pas à nous contacter au{" "}
-            <strong>{CABINET_INFO.phone}</strong>.
+            <strong>{cabinet.phone}</strong>.
           </Text>
 
           <Hr style={{ borderColor: "#e5e7eb", margin: "24px 0" }} />
           <Text style={{ color: "#9ca3af", fontSize: "12px" }}>
-            {CABINET_INFO.name} — {CABINET_INFO.address} — {CABINET_INFO.phone}
+            {cabinet.name} — {cabinet.address} — {cabinet.phone}
           </Text>
         </Container>
       </Body>

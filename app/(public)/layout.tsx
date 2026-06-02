@@ -17,11 +17,14 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { HeartPulse, Phone } from "lucide-react";
-import { CABINET_INFO, CABINET_DEFAULT_SLUG } from "@/lib/cabinet/config";
+import { CABINET_DEFAULT_SLUG } from "@/lib/cabinet/config";
+import { getPublicCabinetProfile } from "@/lib/cabinet/public-profile";
 
-export default function PublicLayout({ children }: { children: ReactNode }) {
+export default async function PublicLayout({ children }: { children: ReactNode }) {
+  // Identité du cabinet lue depuis le profil persisté (story 7.4).
+  const profile = await getPublicCabinetProfile();
   // Numéro nettoyé pour le href `tel:` (les espaces cassent la composition iOS).
-  const phoneHref = `tel:${CABINET_INFO.phone.replace(/\s/g, "")}`;
+  const phoneHref = `tel:${profile.phone.replace(/\s/g, "")}`;
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden bg-background">
@@ -43,7 +46,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
           <Link
             href={`/${CABINET_DEFAULT_SLUG}`}
             className="group flex items-center gap-3 focus-visible:outline-2 focus-visible:outline-primary"
-            aria-label={`Retour à l'accueil — ${CABINET_INFO.name}`}
+            aria-label={`Retour à l'accueil — ${profile.name}`}
           >
             <span
               className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-transform duration-300 group-hover:scale-105"
@@ -53,7 +56,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             </span>
             <span className="flex flex-col leading-tight">
               <span className="text-sm font-semibold text-foreground md:text-base">
-                {CABINET_INFO.name}
+                {profile.name}
               </span>
               <span className="text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground md:text-xs">
                 Médecine générale
@@ -65,10 +68,10 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
           <a
             href={phoneHref}
             className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background px-3 py-2 text-xs font-medium text-foreground shadow-xs transition hover:border-primary/40 hover:text-primary focus-visible:outline-2 focus-visible:outline-primary md:px-4 md:text-sm"
-            aria-label={`Appeler le cabinet au ${CABINET_INFO.phone}`}
+            aria-label={`Appeler le cabinet au ${profile.phone}`}
           >
             <Phone className="h-3.5 w-3.5 text-primary md:h-4 md:w-4" />
-            <span>{CABINET_INFO.phone}</span>
+            <span>{profile.phone}</span>
           </a>
         </div>
       </header>
@@ -80,8 +83,8 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
       <footer className="mt-auto border-t border-border/60 bg-background/60 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-6 text-center text-xs text-muted-foreground md:text-sm">
           <p>
-            © {new Date().getFullYear()} {CABINET_INFO.name} —{" "}
-            {CABINET_INFO.address}
+            © {new Date().getFullYear()} {profile.name} —{" "}
+            {profile.address}
           </p>
         </div>
       </footer>

@@ -1,0 +1,58 @@
+schema: 1
+story: '7.4'
+story_title: 'Profil cabinet public'
+gate: CONCERNS
+status_reason: 'Implémentation complète et de haute qualité, 10/10 ACs couverts, 48 tests verts. Seul bémol non bloquant : lecture publique du profil non dédupliquée (pas de cache()), ~6 requêtes DB par rendu de landing au lieu de 2.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-06-02T09:30:00Z'
+
+waiver: { active: false }
+
+quality_score: 90
+expires: '2026-06-16T09:30:00Z'
+
+evidence:
+  tests_reviewed: 48
+  risks_identified: 2
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    ac_gaps: []
+  notes: >
+    32 nouveaux tests 7.4 (14 validation Zod, 9 helper horaires, 9 actions intégration)
+    + 16 tests e-mail étendus, tous exécutés et verts pendant la revue (vitest run).
+    AC 3 et 9 couverts au niveau action/lecture ; rendu composant non testé (E2E différé,
+    cohérent avec 7.1/7.2/7.3).
+
+top_issues:
+  - id: 'PERF-001'
+    severity: low
+    finding: "getPublicCabinetProfile() appelé 3x par rendu public (generateMetadata + page + layout) sans cache() React ; Server Actions non dédupliquées ⇒ ~6 requêtes DB (cabinetProfile + workingHours) au lieu de 2 par rendu de landing."
+    suggested_owner: dev
+    refs: ['app/dashboard/settings/profile/actions.ts', 'app/(public)/layout.tsx', 'app/(public)/[cabinet-slug]/page.tsx']
+  - id: 'TEST-001'
+    severity: low
+    finding: "Aucun test de rendu composant/E2E ne vérifie que l'édition du profil se reflète sur les surfaces publiques (AC 3) ; seule la couche action est testée."
+    suggested_owner: dev
+    refs: ['components/public/CabinetHeader.tsx', 'app/(public)/layout.tsx']
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'requireUser() sur get/update ; getPublicCabinetProfile public read-only avec select limité (ni id ni timestamps exposés, asserté) ; catch générique sans fuite ; UnauthorizedError re-levée ; Zod double validation ; donnée de config publique (pas de PII patient).'
+  performance:
+    status: CONCERNS
+    notes: 'Lecture publique non dédupliquée (pas de cache()) ⇒ ~6 requêtes par rendu de landing au lieu de 2. Négligeable en MVP single-tenant, correction triviale recommandée.'
+  reliability:
+    status: PASS
+    notes: 'Migration non destructive (CREATE TABLE + seed idempotent NOT EXISTS) ; repli CABINET_INFO si table vide ; libellé horaires avec repli neutre ; gestion erreurs + toasts + conservation saisie.'
+  maintainability:
+    status: PASS
+    notes: 'JSDoc FR systématique, helper horaires pur sans Prisma, validation Zod isolée + types inférés, DTO sérialisables, patterns 7.1/7.2/7.3 respectés à l’identique, mocks étendus (non réécrits).'
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Envelopper la lecture publique du profil dans cache() (React) pour dédupliquer les 3 appels par rendu ; extraire un lecteur hors module 'use server'."
+      refs: ['app/dashboard/settings/profile/actions.ts']
+    - action: "Ajouter un test de rendu composant ou E2E Playwright couvrant la propagation édition → landing/header/footer (AC 3)."
+      refs: ['components/public/CabinetHeader.tsx', 'app/(public)/layout.tsx']

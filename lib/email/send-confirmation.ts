@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { sendEmail } from "./client";
+import { getCabinetEmailInfo } from "./cabinet-info";
 import { ConfirmationEmail } from "./templates/ConfirmationEmail";
 
 interface SendConfirmationEmailParams {
@@ -15,6 +16,7 @@ interface SendConfirmationEmailParams {
 export async function sendConfirmationEmail(
   params: SendConfirmationEmailParams
 ): Promise<void> {
+  const cabinet = await getCabinetEmailInfo();
   await sendEmail({
     to: params.patientEmail,
     subject: "Confirmation de votre rendez-vous",
@@ -24,6 +26,7 @@ export async function sendConfirmationEmail(
       appointmentType: params.appointmentType,
       cancellationToken: params.cancellationToken,
       cabinetSlug: params.cabinetSlug,
+      cabinet,
     }),
     appointmentId: params.appointmentId,
     type: "CONFIRMATION",

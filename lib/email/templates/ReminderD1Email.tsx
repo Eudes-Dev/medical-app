@@ -10,7 +10,7 @@ import {
   Preview,
   Section,
 } from "@react-email/components";
-import { CABINET_INFO } from "@/lib/cabinet/config";
+import type { CabinetEmailInfo } from "@/lib/email/cabinet-info";
 import { formatDate } from "./format";
 
 interface ReminderD1EmailProps {
@@ -18,6 +18,7 @@ interface ReminderD1EmailProps {
   appointmentDate: Date;
   appointmentType: string;
   optOutToken: string;
+  cabinet: CabinetEmailInfo;
 }
 
 export function ReminderD1Email({
@@ -25,6 +26,7 @@ export function ReminderD1Email({
   appointmentDate,
   appointmentType,
   optOutToken,
+  cabinet,
 }: ReminderD1EmailProps) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const unsubscribeUrl = `${appUrl}/unsubscribe?token=${optOutToken}`;
@@ -32,7 +34,7 @@ export function ReminderD1Email({
   return (
     <Html lang="fr">
       <Head />
-      <Preview>Rappel : votre rendez-vous demain — {CABINET_INFO.name}</Preview>
+      <Preview>Rappel : votre rendez-vous demain — {cabinet.name}</Preview>
       <Body style={{ backgroundColor: "#f9fafb", fontFamily: "Arial, sans-serif" }}>
         <Container style={{ maxWidth: "600px", margin: "0 auto", padding: "24px" }}>
           <Heading style={{ color: "#111827", fontSize: "24px" }}>
@@ -53,13 +55,13 @@ export function ReminderD1Email({
             }}
           >
             <Text style={{ margin: "0 0 8px", color: "#374151" }}>
-              <strong>Cabinet :</strong> {CABINET_INFO.name}
+              <strong>Cabinet :</strong> {cabinet.name}
             </Text>
             <Text style={{ margin: "0 0 8px", color: "#374151" }}>
-              <strong>Adresse :</strong> {CABINET_INFO.address}
+              <strong>Adresse :</strong> {cabinet.address}
             </Text>
             <Text style={{ margin: "0 0 8px", color: "#374151" }}>
-              <strong>Téléphone :</strong> {CABINET_INFO.phone}
+              <strong>Téléphone :</strong> {cabinet.phone}
             </Text>
             <Hr style={{ borderColor: "#e5e7eb", margin: "12px 0" }} />
             <Text style={{ margin: "0 0 8px", color: "#374151" }}>
@@ -78,7 +80,7 @@ export function ReminderD1Email({
             </Link>
           </Text>
           <Text style={{ color: "#9ca3af", fontSize: "12px" }}>
-            {CABINET_INFO.name} — {CABINET_INFO.address} — {CABINET_INFO.phone}
+            {cabinet.name} — {cabinet.address} — {cabinet.phone}
           </Text>
         </Container>
       </Body>

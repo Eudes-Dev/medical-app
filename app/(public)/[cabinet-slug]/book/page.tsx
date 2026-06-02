@@ -10,17 +10,20 @@
 import type { Metadata } from "next";
 import { BookingCalendar } from "@/components/public/BookingCalendar";
 import { BookingStepper } from "@/components/public/BookingStepper";
-import { CABINET_INFO } from "@/lib/cabinet/config";
+import { getPublicCabinetProfile } from "@/lib/cabinet/public-profile";
 
-export const metadata: Metadata = {
-  title: `Prendre rendez-vous — ${CABINET_INFO.name}`,
-  description: `Choisissez votre créneau de rendez-vous au ${CABINET_INFO.name}. Réservation en ligne, sans création de compte.`,
-  openGraph: {
-    title: `Prendre rendez-vous — ${CABINET_INFO.name}`,
-    description: "Choisissez la date et l'heure de votre rendez-vous.",
-    type: "website",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const profile = await getPublicCabinetProfile();
+  return {
+    title: `Prendre rendez-vous — ${profile.name}`,
+    description: `Choisissez votre créneau de rendez-vous au ${profile.name}. Réservation en ligne, sans création de compte.`,
+    openGraph: {
+      title: `Prendre rendez-vous — ${profile.name}`,
+      description: "Choisissez la date et l'heure de votre rendez-vous.",
+      type: "website",
+    },
+  };
+}
 
 interface PageProps {
   params: Promise<{ "cabinet-slug": string }>;

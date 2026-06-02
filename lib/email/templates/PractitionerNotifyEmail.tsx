@@ -9,7 +9,7 @@ import {
   Preview,
   Section,
 } from "@react-email/components";
-import { CABINET_INFO } from "@/lib/cabinet/config";
+import type { CabinetEmailInfo } from "@/lib/email/cabinet-info";
 import { formatDate } from "./format";
 
 interface PractitionerNotifyEmailProps {
@@ -19,6 +19,7 @@ interface PractitionerNotifyEmailProps {
   patientEmail?: string;
   appointmentDate: Date;
   appointmentType: string;
+  cabinet: CabinetEmailInfo;
 }
 
 export function PractitionerNotifyEmail({
@@ -28,6 +29,7 @@ export function PractitionerNotifyEmail({
   patientEmail,
   appointmentDate,
   appointmentType,
+  cabinet,
 }: PractitionerNotifyEmailProps) {
   return (
     <Html lang="fr">
@@ -76,7 +78,7 @@ export function PractitionerNotifyEmail({
 
           <Hr style={{ borderColor: "#e5e7eb", margin: "24px 0" }} />
           <Text style={{ color: "#9ca3af", fontSize: "12px" }}>
-            {CABINET_INFO.name} — {CABINET_INFO.address}
+            {cabinet.name} — {cabinet.address}
           </Text>
         </Container>
       </Body>

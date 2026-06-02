@@ -10,7 +10,7 @@ import {
   Preview,
   Section,
 } from "@react-email/components";
-import { CABINET_INFO } from "@/lib/cabinet/config";
+import type { CabinetEmailInfo } from "@/lib/email/cabinet-info";
 import { formatDate } from "./format";
 
 interface ConfirmationEmailProps {
@@ -19,6 +19,7 @@ interface ConfirmationEmailProps {
   appointmentType: string;
   cancellationToken: string;
   cabinetSlug: string;
+  cabinet: CabinetEmailInfo;
 }
 
 export function ConfirmationEmail({
@@ -27,6 +28,7 @@ export function ConfirmationEmail({
   appointmentType,
   cancellationToken,
   cabinetSlug,
+  cabinet,
 }: ConfirmationEmailProps) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const cancellationUrl = `${appUrl}/${cabinetSlug}/book/cancel?token=${cancellationToken}`;
@@ -34,7 +36,7 @@ export function ConfirmationEmail({
   return (
     <Html lang="fr">
       <Head />
-      <Preview>Confirmation de votre rendez-vous — {CABINET_INFO.name}</Preview>
+      <Preview>Confirmation de votre rendez-vous — {cabinet.name}</Preview>
       <Body style={{ backgroundColor: "#f9fafb", fontFamily: "Arial, sans-serif" }}>
         <Container style={{ maxWidth: "600px", margin: "0 auto", padding: "24px" }}>
           <Heading style={{ color: "#111827", fontSize: "24px" }}>
@@ -50,13 +52,13 @@ export function ConfirmationEmail({
 
           <Section style={{ backgroundColor: "#fff", borderRadius: "8px", padding: "16px", border: "1px solid #e5e7eb" }}>
             <Text style={{ margin: "0 0 8px", color: "#374151" }}>
-              <strong>Cabinet :</strong> {CABINET_INFO.name}
+              <strong>Cabinet :</strong> {cabinet.name}
             </Text>
             <Text style={{ margin: "0 0 8px", color: "#374151" }}>
-              <strong>Adresse :</strong> {CABINET_INFO.address}
+              <strong>Adresse :</strong> {cabinet.address}
             </Text>
             <Text style={{ margin: "0 0 8px", color: "#374151" }}>
-              <strong>Téléphone :</strong> {CABINET_INFO.phone}
+              <strong>Téléphone :</strong> {cabinet.phone}
             </Text>
             <Hr style={{ borderColor: "#e5e7eb", margin: "12px 0" }} />
             <Text style={{ margin: "0 0 8px", color: "#374151" }}>
@@ -76,7 +78,7 @@ export function ConfirmationEmail({
 
           <Hr style={{ borderColor: "#e5e7eb", margin: "24px 0" }} />
           <Text style={{ color: "#9ca3af", fontSize: "12px" }}>
-            {CABINET_INFO.name} — {CABINET_INFO.address} — {CABINET_INFO.phone}
+            {cabinet.name} — {cabinet.address} — {cabinet.phone}
           </Text>
         </Container>
       </Body>

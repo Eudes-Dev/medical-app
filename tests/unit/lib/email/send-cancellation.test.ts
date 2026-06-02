@@ -16,6 +16,12 @@ const { mockSendEmail } = vi.hoisted(() => ({
 
 vi.mock("@/lib/email/client", () => ({ sendEmail: mockSendEmail }));
 
+// Story 7.4 : mock du lecteur de profil cabinet (évite Prisma en test unitaire).
+const CABINET = { name: "Cabinet Test", address: "1 rue Test", phone: "01 00 00 00 00" };
+vi.mock("@/lib/email/cabinet-info", () => ({
+  getCabinetEmailInfo: vi.fn().mockResolvedValue(CABINET),
+}));
+
 const { sendCancellationEmail } = await import("@/lib/email/send-cancellation");
 
 describe("sendCancellationEmail", () => {
@@ -51,6 +57,7 @@ describe("sendCancellationEmail", () => {
     expect(call.react.props).toMatchObject({
       patientFirstName: "Marie",
       appointmentType: "Consultation de suivi",
+      cabinet: CABINET,
     });
   });
 

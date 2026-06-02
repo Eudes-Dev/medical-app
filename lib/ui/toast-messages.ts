@@ -23,6 +23,9 @@ export const TOAST_MESSAGES = {
   schedule: {
     saved: "Horaires enregistrés.",
   },
+  cabinetProfile: {
+    saved: "Profil du cabinet enregistré.",
+  },
   timeOff: {
     created: "Exception ajoutée.",
     deleted: "Exception supprimée.",

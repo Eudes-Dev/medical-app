@@ -372,3 +372,36 @@ model MessageLog {
 
   @@map("message_logs")
 }
+
+/// Profil public du cabinet (story 7.4). Singleton single-tenant : une seule ligne.
+///
+/// Remplace l'ancien objet codé en dur `CABINET_INFO` (lib/cabinet/config.ts) comme
+/// source de vérité de l'identité publique (nom, adresse, téléphone, présentation).
+/// Lecture via `findFirst`, écriture via `upsert` (pas de liste ni de suppression).
+///
+/// Le libellé d'horaires n'est PAS stocké ici : il est dérivé des `WorkingHours`
+/// (story 7.1) à la lecture publique — source unique de vérité.
+///
+/// Single-tenant : pas de `userId`/`tenantId`. Structure compatible avec une
+/// extension multi-praticien future (story 18.1) par ajout d'une colonne de scoping.
+model CabinetProfile {
+  id          String   @id @default(uuid())
+  /// Nom public du cabinet (2–80 car.).
+  name        String
+  /// Accroche / sous-titre public optionnel (≤ 120 car.).
+  tagline     String?
+  /// Présentation publique optionnelle (≤ 1000 car.).
+  description String?
+  /// Adresse postale (≤ 200 car.).
+  address     String
+  /// Téléphone de contact (format FR validé côté app via libphonenumber-js).
+  phone       String
+  /// E-mail de contact public optionnel.
+  email       String?
+  /// Infos d'accès / transports optionnelles (≤ 500 car.).
+  accessInfo  String?  @map("access_info")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("cabinet_profile")
+}

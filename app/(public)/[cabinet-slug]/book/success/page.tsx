@@ -13,7 +13,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { CABINET_INFO } from "@/lib/cabinet/config";
+import { getPublicCabinetProfile } from "@/lib/cabinet/public-profile";
 import { readBookingCookie } from "@/lib/booking/session-cookie";
 import { BookingStepper } from "@/components/public/BookingStepper";
 import { BookingConfirmation } from "@/components/public/BookingConfirmation";
@@ -56,6 +56,8 @@ export default async function BookingSuccessPage({ params }: PageProps) {
     ),
   );
 
+  const profile = await getPublicCabinetProfile();
+
   return (
     <div className="flex min-h-screen flex-col bg-[color-mix(in_oklab,#f8fafc_50%,white)]">
       <BookingStepper current={3} />
@@ -70,8 +72,8 @@ export default async function BookingSuccessPage({ params }: PageProps) {
             phone: appointment.patient?.phone ?? "",
             doctorName: "Médecin du cabinet",
             doctorSpeciality: "Médecine générale",
-            cabinetName: CABINET_INFO.name,
-            cabinetAddress: CABINET_INFO.address,
+            cabinetName: profile.name,
+            cabinetAddress: profile.address,
           }}
         />
       </main>

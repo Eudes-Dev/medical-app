@@ -314,6 +314,7 @@ describe("Story 3.3 — Gestion des créneaux", () => {
       vi.mocked(prisma.serviceType.findUnique).mockResolvedValue({
         label: "Bilan complet",
         durationMin: 45,
+        active: true,
       } as any);
       vi.mocked(prisma.appointment.create).mockResolvedValue(
         appointmentFixture({ id: "svc-apt" }) as any
@@ -352,6 +353,29 @@ describe("Story 3.3 — Gestion des créneaux", () => {
       });
 
       expect(result.success).toBe(false);
+      expect(prisma.appointment.create).not.toHaveBeenCalled();
+    });
+
+    it("7.3 (SEC-002): service archivé (active=false) → success false sans création", async () => {
+      vi.mocked(prisma.appointment.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.serviceType.findUnique).mockResolvedValue({
+        label: "Détartrage",
+        durationMin: 45,
+        active: false,
+      } as any);
+
+      const result = await createAppointment({
+        patientId: "11111111-1111-1111-1111-111111111111",
+        startTime: futureDate(),
+        duration: 30,
+        serviceTypeId: "77777777-7777-4777-8777-777777777777",
+      });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toMatch(/archiv/i);
+      }
+      // Aucune création avec un service archivé (durcissement dashboard).
       expect(prisma.appointment.create).not.toHaveBeenCalled();
     });
   });
@@ -458,6 +482,30 @@ describe("Story 3.3 — Gestion des créneaux", () => {
       expect(prisma.serviceType.findUnique).not.toHaveBeenCalled();
       const updateCall = vi.mocked(prisma.appointment.update).mock.calls[0][0]!;
       expect((updateCall.data as { type: string }).type).toBe("Ancien motif");
+    });
+
+    it("7.3 (SEC-002): refuse de (re)rattacher un service archivé à l'édition", async () => {
+      vi.mocked(prisma.appointment.findUnique).mockResolvedValue(
+        appointmentFixture({ type: "Suivi", serviceTypeId: null }) as any
+      );
+      vi.mocked(prisma.appointment.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.serviceType.findUnique).mockResolvedValue({
+        label: "Détartrage",
+        durationMin: 60,
+        active: false,
+      } as any);
+
+      const result = await updateAppointment(
+        "33333333-3333-4333-8333-333333333333",
+        { serviceTypeId: "77777777-7777-4777-8777-777777777777" }
+      );
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toMatch(/archiv/i);
+      }
+      // Le RDV ne doit pas être modifié avec un service archivé.
+      expect(prisma.appointment.update).not.toHaveBeenCalled();
     });
   });
 

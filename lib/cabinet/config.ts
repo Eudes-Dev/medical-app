@@ -1,12 +1,15 @@
 /**
  * Configuration du cabinet (single-tenant).
  *
- * Source UNIQUE consommée à la fois par:
- * - La landing page publique (affichage nom/adresse/horaires)
- * - La logique de génération de créneaux (`getAvailableSlots`)
+ * Depuis la story 7.4, l'identité publique du cabinet (nom/adresse/téléphone)
+ * est portée par le modèle persistant `CabinetProfile` (table `cabinet_profile`)
+ * et lue via `getPublicCabinetProfile()`. `CABINET_INFO` n'est plus la source de
+ * vérité : il ne sert plus que de **valeurs de repli** (defaults d'amorçage) si
+ * la table profil est vide, et n'est plus importé par les surfaces publiques.
  *
- * Pour le MVP single-tenant, ces valeurs sont en dur. Lors du passage
- * multi-tenant (story 18.1), elles seront résolues depuis la base via le slug.
+ * Restent des constantes de configuration à part entière (NE PAS retirer) :
+ * - `CABINET_TIMEZONE`   — fuseau du cabinet (rappels 6.2 / TZ 5.3)
+ * - `CABINET_DEFAULT_SLUG` — slug canonique pour les liens internes (layout public)
  *
  * @module lib/cabinet/config
  */
@@ -35,6 +38,13 @@ export interface CabinetInfo {
   openingHours: OpeningHours;
 }
 
+/**
+ * Valeurs de repli de l'identité du cabinet (story 7.4).
+ *
+ * @deprecated comme source de vérité : utiliser `getPublicCabinetProfile()`.
+ * Conservé uniquement comme defaults d'amorçage si la table `cabinet_profile`
+ * est vide (premier déploiement). N'est plus importé par les surfaces publiques.
+ */
 export const CABINET_INFO: CabinetInfo = {
   name: "Cabinet Médical",
   address: "12 rue de la Santé, 75014 Paris",
