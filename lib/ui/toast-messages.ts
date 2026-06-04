@@ -19,6 +19,9 @@ export const TOAST_MESSAGES = {
   },
   booking: {
     confirmed: "Rendez-vous confirmé !",
+    rescheduled: "Rendez-vous reprogrammé.",
+    tooLate:
+      "Ce rendez-vous est trop proche pour être modifié en ligne. Merci de contacter le cabinet.",
   },
   schedule: {
     saved: "Horaires enregistrés.",

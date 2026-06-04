@@ -13,7 +13,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarX, Check, Loader2 } from "lucide-react";
+import { CalendarClock, CalendarX, Check, Loader2 } from "lucide-react";
 import { cancelByToken } from "@/app/(public)/[cabinet-slug]/book/cancel/actions";
 import { showError } from "@/lib/ui/toast";
 import { TOAST_MESSAGES } from "@/lib/ui/toast-messages";
@@ -25,6 +25,11 @@ interface Props {
   appointmentType: string;
   /** Vrai si le RDV est déjà annulé (lien rejoué) — affiche l'état final directement. */
   alreadyCancelled: boolean;
+  /**
+   * Vrai si le RDV est encore reprogrammable (actif + hors fenêtre de délai, story 8.1).
+   * Conditionne l'affichage de l'action « Reprogrammer plutôt ».
+   */
+  reschedulable: boolean;
   cabinetSlug: string;
 }
 
@@ -33,6 +38,7 @@ export function CancelConfirmation({
   dateLabel,
   appointmentType,
   alreadyCancelled,
+  reschedulable,
   cabinetSlug,
 }: Props) {
   const router = useRouter();
@@ -122,6 +128,22 @@ export function CancelConfirmation({
           Garder mon rendez-vous
         </button>
       </div>
+
+      {/* Reprogrammer plutôt (story 8.1) — proposé uniquement si le RDV est
+          encore reprogrammable (actif + hors fenêtre de délai). */}
+      {reschedulable && (
+        <button
+          type="button"
+          onClick={() =>
+            router.push(`/${cabinetSlug}/book/reschedule?token=${token}`)
+          }
+          disabled={isPending}
+          className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-full text-sm font-semibold text-blue-600 transition hover:bg-blue-50 disabled:cursor-not-allowed"
+        >
+          <CalendarClock className="h-4 w-4" />
+          Reprogrammer plutôt
+        </button>
+      )}
     </div>
   );
 }

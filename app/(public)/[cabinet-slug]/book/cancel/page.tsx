@@ -15,6 +15,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { formatSlotParis } from "@/lib/booking/format";
 import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit";
+import { canStillManage } from "@/lib/booking/reschedule-policy";
 import { CancelConfirmation } from "@/components/public/CancelConfirmation";
 
 export const metadata: Metadata = {
@@ -77,6 +78,11 @@ export default async function CancelPage({ params, searchParams }: PageProps) {
             dateLabel={formatSlotParis(appointment.startTime)}
             appointmentType={appointment.type}
             alreadyCancelled={appointment.status === "CANCELLED"}
+            reschedulable={
+              appointment.status !== "CANCELLED" &&
+              appointment.status !== "COMPLETED" &&
+              canStillManage(appointment.startTime)
+            }
             cabinetSlug={slug}
           />
         )}

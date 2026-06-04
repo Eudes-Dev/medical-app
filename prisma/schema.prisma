@@ -61,13 +61,15 @@ enum MessageChannel {
   SMS
 }
 
-/// Type de message transactionnel envoyé (story 6.1, renommé en 6.3).
+/// Type de message transactionnel envoyé (story 6.1, renommé en 6.3, étendu en 8.1).
 enum MessageType {
   CONFIRMATION
   CANCELLATION
   PRACTITIONER_NOTIFY
   REMINDER_D1
   REMINDER_H2
+  /// Reprogrammation patient self-service (story 8.1).
+  RESCHEDULED
 }
 
 /// Statut de l'envoi d'un message transactionnel (story 6.1, renommé en 6.3).

@@ -1,0 +1,44 @@
+schema: 1
+story: '8.1'
+story_title: 'Reprogrammation patient self-service'
+gate: PASS
+status_reason: 'Implémentation propre clonant fidèlement les patterns sécurisés 5.3/6.1/4.x ; 12/12 AC tracés et couverts par 26 tests verts (26/26 en isolation). Aucun problème bloquant.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-06-04T21:55:00Z'
+
+top_issues: []
+waiver: { active: false }
+
+quality_score: 100
+expires: '2026-06-18T21:55:00Z'
+
+evidence:
+  tests_reviewed: 26
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Action publique protégée par token UUID opaque + rate-limiter (10/10min) avant DB ; throttle GET (30/min) + noindex ; messages neutres anti-énumération ; aucune fuite PII ; select Prisma minimal ; défense en profondeur (délai + collision + TimeOff côté serveur). Aucun nouveau champ PII.'
+  performance:
+    status: PASS
+    notes: 'Lookups sur cancellationToken @unique (indexé) ; findMany borné au jour Paris ciblé ; email fire-and-forget non bloquant ; pas de N+1.'
+  reliability:
+    status: PASS
+    notes: 'try/catch → SERVER sans fuite ; email tolérant aux pannes (canal 6.1 + MessageLog) ; durée conservée. Note mineure : reschedule non idempotent (re-submit même créneau = update no-op + 2e email), impact négligeable.'
+  maintainability:
+    status: PASS
+    notes: 'Extraction DRY slot-picker (option préférée, pas de dette) ; libellés FR centralisés dans TOAST_MESSAGES ; JSDoc sourcé ; routes symétriques de book/cancel.'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Unifier le regroupement Matin/Après-midi (s.getHours()) sur un fuseau Europe/Paris explicite pour les deux consommateurs (BookingCalendar + RescheduleFlow) si un usage multi-fuseau apparaît.'
+      refs: ['components/public/RescheduleFlow.tsx', 'components/public/BookingCalendar.tsx']
+    - action: 'Stabiliser la flakiness userEvent+jsdom de patients-table-wrapper.test.tsx sous charge (timeout 5000ms) — dette infra pré-existante, hors 8.1.'
+      refs: ['tests/component/patients/patients-table-wrapper.test.tsx']
+    - action: 'Optionnel : rendre rescheduleByToken idempotent (no-op si newSlot == créneau courant) pour éviter un 2e email sur retry réseau.'
+      refs: ['app/(public)/[cabinet-slug]/book/reschedule/actions.ts']

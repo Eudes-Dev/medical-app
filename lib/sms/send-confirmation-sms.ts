@@ -36,11 +36,15 @@ export async function sendConfirmationSms(
   params: SendConfirmationSmsParams,
 ): Promise<void> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const cancelUrl = `${appUrl}/${params.cabinetSlug}/book/cancel?token=${params.cancellationToken}`;
+  // Story 8.1 : un seul lien de gestion pour rester ≤ 1 segment SMS (arbitrage
+  // AC 10). La page `book/cancel` est le **hub** de gestion : elle propose à la
+  // fois l'annulation ET la reprogrammation (« Reprogrammer plutôt »). Deux URLs
+  // complètes (annuler + reprogrammer) dépasseraient 160 caractères.
+  const manageUrl = `${appUrl}/${params.cabinetSlug}/book/cancel?token=${params.cancellationToken}`;
   const when = formatShortDateTime(params.appointmentDate);
   // « enregistré » (et non « confirmé ») : le RDV est créé en statut PENDING,
   // pas encore validé par le praticien (QA UX-001).
-  const body = `Cabinet Médical : RDV enregistré le ${when}. Annuler : ${cancelUrl}`;
+  const body = `Cabinet Médical : RDV enregistré le ${when}. Gérer mon RDV : ${manageUrl}`;
 
   await sendSms({
     to: params.patientPhone,

@@ -55,7 +55,7 @@
 |---|---|---|
 | 5.1 | Feedback utilisateur (UX) | 🔵 Ready for Review — gate CONCERNS (UI-001 **clos** par [ADR UI](../architecture/4-ui-design-system-decision.md)) |
 | 5.2 | Sécurisation & tests E2E | 🔵 Ready for Review — gate créée 2026-05-30 |
-| **5.3** | **Consolidation pré-production (TZ, rate-limiting, route d'annulation, migrations)** | 🟠 **Approved — à implémenter (BLOQUANT PROD)** |
+| **5.3** | **Consolidation pré-production (TZ, rate-limiting, route d'annulation, migrations)** | 🔵 **Implémenté (commit `c09e8cb`)** — gate QA à finaliser |
 
 ### Épopée 6 — Notifications
 | Story | Titre | Statut |
@@ -96,7 +96,7 @@ Ces stories ont été **retirées du dépôt** ; elles sont conservées ici comm
 
 | Épopée | Stories | Thème |
 |---|---|---|
-| 8 | 8.1 annulation/reprogrammation · 8.2 drag-and-drop · 8.3 vues jour/mois · 8.4 RDV récurrents · 8.5 liste d'attente | Agenda avancé |
+| 8 | ~~8.1 annulation/reprogrammation~~ **→ promue au périmètre actif (Approved, 2026-06-04)** · 8.2 drag-and-drop · 8.3 vues jour/mois · 8.4 RDV récurrents · 8.5 liste d'attente | Agenda avancé |
 | 9 | 9.1 notes de consultation · 9.2 documents médicaux · 9.3 antécédents | Dossier patient |
 | 10 | 10.1 statistiques avancées · 10.2 export données | Analytics |
 | 11 | 11.1 consentement RGPD · 11.2 droit à l'oubli/export · 11.3 journal d'audit · 11.4 chiffrement | RGPD / Sécurité |
@@ -123,3 +123,4 @@ Ces stories ont été **retirées du dépôt** ; elles sont conservées ici comm
 | Date | Version | Description | Auteur |
 |---|---|---|---|
 | 2026-05-30 | 1.0 | Reconstruction du ROADMAP supprimé. Ré-ancrage de la dette transverse vers la story 5.3. Reclassement explicite des épopées 8→18 en backlog post-MVP. | PO (Sarah) |
+| 2026-06-04 | 1.1 | Statut 5.3 réconcilié (périmètre mergé, commit `c09e8cb`). Story 8.1 (reprogrammation patient self-service) promue du backlog au périmètre actif (Approved) ; 8.2→8.5 restent au backlog. | PO (Sarah) |

@@ -1,0 +1,12 @@
+-- Story 8.1 : Reprogrammation patient self-service.
+-- Ajoute la valeur 'RESCHEDULED' à l'enum MessageType pour journaliser l'email
+-- de reprogrammation (lib/email/send-reschedule.ts) dans message_logs.
+--
+-- Idempotence (cf. OPS-003 de la story 5.3) : `ADD VALUE IF NOT EXISTS` rend la
+-- migration rejouable sans erreur. La valeur n'est PAS consommée dans cette même
+-- migration (contrainte PostgreSQL < 12 sur l'usage d'une valeur d'enum ajoutée
+-- dans la même transaction) — cible Supabase = PG15, OK.
+--
+-- AUCUNE autre modification de schéma : la reprogrammation réutilise
+-- `appointments.cancellation_token` comme jeton de gestion (pas de nouveau champ).
+ALTER TYPE "MessageType" ADD VALUE IF NOT EXISTS 'RESCHEDULED';
