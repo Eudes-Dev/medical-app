@@ -1,0 +1,75 @@
+schema: 1
+story: "8.2"
+story_title: "Drag-and-drop de l'agenda (déplacement de RDV)"
+gate: PASS
+status_reason: "Cycle de QA fixes complet : FUNC-001 (dépôt inter-jours) corrigé ET verrouillé par un test de régression reproduisant le bug ; branches d'orchestration et résolution DOM désormais couvertes. Régression 532/532 verte. Reste un E2E Playwright non bloquant (story 3.6)."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-04T23:12:00Z"
+
+waiver: { active: false }
+
+top_issues:
+  - id: "FUNC-001"
+    severity: medium
+    finding: "resolveDropTarget appelait document.elementFromPoint sans neutraliser la carte tirée (z-50, translatée, toujours sous le pointeur) → hit-test renvoyait la carte, closest('[data-day-key]') remontait vers sa colonne d'origine → dépôt inter-jours (AC 3, vue semaine) cassé + surlignage dans la mauvaise colonne."
+    suggested_owner: dev
+    status: resolved
+    resolution: "Paramètre `ignore` désactivant temporairement les pointer-events de la carte tirée pendant le hit-test (try/finally), câblé sur onPointerMove/onPointerUp via e.currentTarget. Test de régression ajouté (drag-utils.test.ts › resolveDropTarget) reproduisant la condition de bug et vérifiant colonne/créneau corrects + restauration pointer-events."
+    refs:
+      - "components/calendar/drag-utils.ts"
+      - "components/calendar/AppointmentCard.tsx"
+      - "tests/unit/calendar/drag-utils.test.ts"
+  - id: "TEST-001"
+    severity: low
+    finding: "La résolution géométrique réelle (resolveDropTarget non mocké) n'avait aucune couverture automatisée — trou par lequel FUNC-001 est passé silencieusement."
+    suggested_owner: dev
+    status: resolved
+    resolution: "Tests unitaires de resolveDropTarget avec géométrie mockée (elementFromPoint + getBoundingClientRect). Verrouillage pixel-parfait en navigateur réel laissé à un E2E Playwright (cf. recommandations future / story 3.6)."
+    refs:
+      - "tests/unit/calendar/drag-utils.test.ts"
+  - id: "TEST-002"
+    severity: low
+    finding: "Branches non couvertes au niveau moveAppointment : no-op créneau identique et chemin exception (catch → revert + errors.server)."
+    suggested_owner: dev
+    status: resolved
+    resolution: "tests/unit/calendar/move-appointment.test.ts (4 tests) : no-op, succès, échec métier, exception réseau."
+    refs:
+      - "tests/unit/calendar/move-appointment.test.ts"
+
+quality_score: 95
+
+evidence:
+  tests_reviewed: 27
+  risks_identified: 3
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    ac_gaps: []
+  notes: "8.2 ciblé 27/27 ; régression complète 60 fichiers / 532 tests, 0 échec (+7 vs cycle précédent)."
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "Aucune garde métier côté client ; tout délégué à updateAppointment (requireUser, assertValidUuid, checkConflict). Revert systématique sur échec/exception — pas d'écriture optimiste non confirmée."
+  performance:
+    status: PASS
+    notes: "Notification de cible uniquement au changement (sameTarget) ; transitions CSS coupées pendant le drag ; toggle pointer-events O(1) borné au tick synchrone."
+  reliability:
+    status: PASS
+    notes: "Optimisme + revert sur { success:false } et exception réseau (testés) ; setPointerCapture gardé ; pointercancel géré."
+  maintainability:
+    status: PASS
+    notes: "DRY effectif, logique extraite/testable, et désormais la résolution DOM est couverte par un test de régression reproduisant FUNC-001. La réserve du gate précédent est levée."
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Ajouter un E2E Playwright du drag réel en vue semaine (déplacement inter-jours + surlignage de la bonne colonne) pour un verrouillage pixel-parfait que jsdom ne peut pas fournir."
+      refs: ["tests/unit/calendar/drag-utils.test.ts"]
+
+history:
+  - at: "2026-06-04T22:55:00Z"
+    gate: CONCERNS
+    note: "Revue initiale. FUNC-001 corrigé en revue ; TEST-001/TEST-002 ouverts (dette de couverture sur la géométrie DOM)."
+  - at: "2026-06-04T23:12:00Z"
+    gate: PASS
+    note: "Re-test après QA fixes. FUNC-001 verrouillé par test de régression ; TEST-001/TEST-002 résolus ; cleanup use client ; 532/532 vert."

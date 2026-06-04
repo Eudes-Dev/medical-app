@@ -37,6 +37,13 @@ import {
 } from "@/lib/cabinet/time-off";
 import { toMinutes } from "@/lib/cabinet/working-hours";
 import type { ViewMode } from "@/stores/useCalendarStore";
+import {
+  GRID_START_HOUR as HOUR_START,
+  GRID_END_HOUR as HOUR_END,
+  SLOT_COUNT,
+  SLOT_HEIGHT_PX,
+} from "./calendar-utils";
+import { DAY_KEY_ATTR } from "./drag-utils";
 
 /** Exception d'agenda à matérialiser sur la grille (story 7.2). */
 export interface CalendarTimeOff extends TimeOffInterval {
@@ -45,14 +52,10 @@ export interface CalendarTimeOff extends TimeOffInterval {
   source: "MANUAL" | "HOLIDAY";
 }
 
-/** Heure de début de la grille (inclus) */
-const HOUR_START = 8;
-/** Heure de fin de la grille (inclus, dernière ligne affichée) */
-const HOUR_END = 20;
-/** Nombre de créneaux de 30 minutes entre HOUR_START et HOUR_END */
-const SLOT_COUNT = (HOUR_END - HOUR_START) * 2;
-/** Hauteur d'un créneau en pixels (utilisé pour le calcul de la ligne "now") */
-const SLOT_HEIGHT_PX = 30;
+/**
+ * Géométrie de la grille (8h–20h, créneaux de 30 min). Source unique de vérité
+ * dans `calendar-utils` (DRY, story 8.2) — réutilisée ici et dans `drag-utils`.
+ */
 /** Seuil au-delà duquel une journée est considérée comme "surchargée". */
 const OVERLOAD_THRESHOLD = 12;
 
@@ -90,6 +93,11 @@ export interface CalendarGridProps {
    * Le praticien reste autorisé à créer un RDV (overlay non-bloquant).
    */
   timeOffs?: CalendarTimeOff[];
+  /**
+   * Créneau cible mis en surbrillance pendant un glisser-déposer (story 8.2).
+   * `dayKey` = colonne (YYYY-MM-DD), `slotIndex` = créneau 0..23. `null` au repos.
+   */
+  dropTarget?: { dayKey: string; slotIndex: number } | null;
 }
 
 /** Export pour la page: nombre de créneaux (30 min) entre 8h et 20h */
@@ -286,6 +294,7 @@ export function CalendarGrid({
   dayCounts = {},
   onSlotClick,
   timeOffs = [],
+  dropTarget = null,
 }: CalendarGridProps) {
   const dates = getDisplayDates(pivotDate, viewMode);
 
@@ -373,11 +382,28 @@ export function CalendarGrid({
                 gridRow: `1 / -1`,
               }}
             >
-              {/* Zone des créneaux : hauteur fixe = SLOT_COUNT * SLOT_HEIGHT_PX */}
+              {/* Zone des créneaux : hauteur fixe = SLOT_COUNT * SLOT_HEIGHT_PX.
+                  `data-day-key` permet au glisser-déposer (story 8.2) de retrouver
+                  la colonne survolée et d'aligner `offsetY = clientY - rect.top`
+                  sur l'index de créneau. */}
               <div
                 className="relative flex-1 overflow-hidden"
                 style={{ height: SLOT_COUNT * SLOT_HEIGHT_PX }}
+                {...{ [DAY_KEY_ATTR]: key }}
               >
+                {/* Surbrillance du créneau cible pendant un drag (story 8.2, AC 1).
+                    Rendu sous les cartes (z-[5]) pour ne pas masquer le RDV tiré. */}
+                {dropTarget?.dayKey === key && (
+                  <div
+                    className="pointer-events-none absolute left-0.5 right-0.5 z-[5] rounded-sm bg-primary/15 ring-2 ring-primary/40"
+                    style={{
+                      top: dropTarget.slotIndex * SLOT_HEIGHT_PX,
+                      height: SLOT_HEIGHT_PX,
+                    }}
+                    aria-hidden
+                  />
+                )}
+
                 {/* Lignes de séparation des créneaux (plus visibles aux heures pleines) */}
                 {TIME_LABELS.map((slot, i) => (
                   <div

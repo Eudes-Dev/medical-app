@@ -44,6 +44,7 @@ import { AppointmentCard } from "@/components/calendar/AppointmentCard";
 import { CreateAppointmentModal } from "@/components/calendar/CreateAppointmentModal";
 import { AppointmentDetailsModal } from "@/components/calendar/AppointmentDetailsModal";
 import { getAppointmentsByDateRange } from "@/app/dashboard/calendar/actions";
+import { moveAppointment } from "@/app/dashboard/calendar/move-appointment";
 import { getTimeOffsByDateRange } from "@/app/dashboard/settings/timeoff/actions";
 import {
   useCalendarStore,
@@ -99,6 +100,10 @@ export default function CalendarPage() {
   const setAppointments = useCalendarStore((s) => s.setAppointments);
 
   const [loading, setLoading] = useState(false);
+  /** Créneau cible surligné pendant un glisser-déposer (story 8.2). */
+  const [dropTarget, setDropTarget] = useState<
+    { dayKey: string; slotIndex: number } | null
+  >(null);
   /** Exceptions actives (story 7.2) sur la plage affichée. Hors du store
    * `useCalendarStore` car non couvertes par son cache existant ; rafraîchies
    * en parallèle des RDV pour rester synchronisées avec la navigation. */
@@ -172,6 +177,36 @@ export default function CalendarPage() {
     [appointments]
   );
 
+  /** Surlignage du créneau cible pendant un drag (story 8.2). */
+  const handleDropTargetChange = useCallback(
+    (target: { day: Date; slotIndex: number } | null) => {
+      setDropTarget(
+        target
+          ? { dayKey: format(target.day, "yyyy-MM-dd"), slotIndex: target.slotIndex }
+          : null
+      );
+    },
+    []
+  );
+
+  /**
+   * Dépôt d'un RDV sur un créneau (story 8.2) : déplacement optimiste + revert,
+   * délégué à `moveAppointment` (réutilise la Server Action `updateAppointment`).
+   */
+  const handleMove = useCallback(
+    (appointment: AppointmentWithPatient, day: Date, slotIndex: number) => {
+      void moveAppointment({
+        appointment,
+        day,
+        slotIndex,
+        cacheKey,
+        getAppointments,
+        setAppointments,
+      });
+    },
+    [cacheKey, getAppointments, setAppointments]
+  );
+
   const dayContent = useMemo(() => {
     const content: Record<string, React.ReactNode> = {};
     for (const [dayKey, list] of Object.entries(byDay)) {
@@ -182,13 +217,15 @@ export default function CalendarPage() {
               key={apt.id}
               appointment={apt}
               onSelect={(apt) => setSelectedAppointment(apt)}
+              onMove={handleMove}
+              onDropTargetChange={handleDropTargetChange}
             />
           ))}
         </>
       );
     }
     return content;
-  }, [byDay]);
+  }, [byDay, handleMove, handleDropTargetChange]);
 
   /** Clic sur un créneau vide: ouvre la modal de création avec date/heure pré-remplies */
   const handleSlotClick = useCallback((date: Date, slotIndex: number) => {
@@ -257,6 +294,7 @@ export default function CalendarPage() {
                 dayCounts={dayCounts}
                 onSlotClick={handleSlotClick}
                 timeOffs={timeOffs}
+                dropTarget={dropTarget}
               />
             )}
           </div>

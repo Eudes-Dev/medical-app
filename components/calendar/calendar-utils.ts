@@ -12,7 +12,25 @@ import type { AppointmentStatus } from "@/types";
 
 /** Plage horaire de la grille : 8h à 20h = 12h = 720 minutes */
 export const GRID_START_HOUR = 8;
+/** Heure de fin de la grille (exclusive pour les créneaux). */
+export const GRID_END_HOUR = 20;
 export const GRID_TOTAL_MINUTES = 12 * 60;
+
+/**
+ * Géométrie de la grille — source unique de vérité (story 8.2, DRY).
+ *
+ * Ces constantes étaient auparavant redéfinies en privé dans `CalendarGrid` et
+ * doivent rester partagées avec `drag-utils` (mapping position → créneau) pour
+ * éviter des « nombres magiques » divergents.
+ *
+ * - `SLOT_DURATION_MIN` : durée d'un créneau (30 min).
+ * - `SLOT_COUNT`        : nombre de créneaux entre 8h et 20h (= 24).
+ * - `SLOT_HEIGHT_PX`    : hauteur d'un créneau en pixels (= 30). La zone des
+ *   créneaux d'une colonne jour mesure donc `SLOT_COUNT * SLOT_HEIGHT_PX` px.
+ */
+export const SLOT_DURATION_MIN = 30;
+export const SLOT_COUNT = (GRID_END_HOUR - GRID_START_HOUR) * 2;
+export const SLOT_HEIGHT_PX = 30;
 
 /**
  * Couleurs des statuts pour le calendrier (Story 3.2 Dev Notes).

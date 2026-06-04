@@ -15,6 +15,7 @@
  * @module components/calendar/AppointmentCard
  */
 
+import { useRef, useState } from "react";
 import { format } from "date-fns";
 import { Check, CheckCheck, Clock, XCircle } from "lucide-react";
 
@@ -25,12 +26,49 @@ import {
   calculateTop,
   getDurationMinutes,
 } from "./calendar-utils";
+import { resolveDropTarget } from "./drag-utils";
+
+/**
+ * Seuil de mouvement (px) au-delà duquel un appui maintenu devient un drag.
+ * En-deçà, le geste reste un clic qui ouvre le détail (story 8.2, AC 2).
+ */
+const DRAG_THRESHOLD_PX = 5;
+
+/** Statuts dont la carte est déplaçable au pointeur (story 8.2, AC 1). */
+const DRAGGABLE_STATUSES: AppointmentStatus[] = ["PENDING", "CONFIRMED"];
+
+/** Égalité de deux cibles de dépôt (même jour + même créneau), pour ne pas
+ * re-notifier le parent à chaque pixel parcouru. */
+function sameTarget(
+  a: { day: Date; slotIndex: number } | null,
+  b: { day: Date; slotIndex: number } | null,
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.slotIndex === b.slotIndex && a.day.getTime() === b.day.getTime();
+}
 
 export interface AppointmentCardProps {
   /** Rendez-vous avec infos patient */
   appointment: AppointmentWithPatient;
   /** Ouverture du drawer/détail au clic (optionnel, pour mobile) */
   onSelect?: (appointment: AppointmentWithPatient) => void;
+  /**
+   * Déplacement par glisser-déposer (story 8.2). Émis au relâchement sur un
+   * créneau valide. Si absent, la carte n'est pas déplaçable (clic seul).
+   */
+  onMove?: (
+    appointment: AppointmentWithPatient,
+    day: Date,
+    slotIndex: number,
+  ) => void;
+  /**
+   * Notifie la cible de dépôt survolée pendant le drag (pour le surlignage du
+   * créneau dans la grille), ou `null` quand il n'y a pas de cible / fin de drag.
+   */
+  onDropTargetChange?: (
+    target: { day: Date; slotIndex: number } | null,
+  ) => void;
 }
 
 /**
@@ -93,12 +131,118 @@ const STATUS_STYLES: Record<
  * Carte uniforme d'un rendez-vous, positionnée en absolu dans la colonne jour.
  * Hauteur fixe = CARD_HEIGHT_PX. Position verticale = heure de début.
  */
-export function AppointmentCard({ appointment, onSelect }: AppointmentCardProps) {
+export function AppointmentCard({
+  appointment,
+  onSelect,
+  onMove,
+  onDropTargetChange,
+}: AppointmentCardProps) {
   const { patient, startTime, endTime, status, type, serviceColor } = appointment;
   const durationMinutes = getDurationMinutes(startTime, endTime);
   const top = calculateTop(startTime);
   const styles = STATUS_STYLES[status] ?? STATUS_STYLES.COMPLETED;
   const StatusIcon = styles.Icon;
+
+  // --- Glisser-déposer (story 8.2) ---------------------------------------
+  // Une carte n'est déplaçable que si un handler `onMove` est fourni ET que le
+  // statut est actif (PENDING/CONFIRMED). Les RDV annulés/terminés restent un
+  // simple bouton (clic → détail), curseur normal (AC 1).
+  const isDraggable = !!onMove && DRAGGABLE_STATUSES.includes(status);
+
+  /** État interne du geste pointeur (null = aucun appui en cours). */
+  const gesture = useRef<{
+    startX: number;
+    startY: number;
+    pointerId: number;
+    dragging: boolean;
+    lastTarget: { day: Date; slotIndex: number } | null;
+  } | null>(null);
+  /** Translation visuelle de la carte tirée (null = au repos). */
+  const [drag, setDrag] = useState<{ dx: number; dy: number } | null>(null);
+  /** Empêche le `onClick` d'ouverture juste après un drag (AC 2). */
+  const suppressClick = useRef(false);
+
+  function handlePointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+    // Bouton principal / toucher uniquement ; ignore clic droit & milieu.
+    if (!isDraggable || e.button !== 0) return;
+    suppressClick.current = false;
+    gesture.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      pointerId: e.pointerId,
+      dragging: false,
+      lastTarget: null,
+    };
+    const el = e.currentTarget;
+    if (typeof el.setPointerCapture === "function") {
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        /* jsdom / navigateurs sans pointer capture : sans effet, non bloquant. */
+      }
+    }
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLButtonElement>) {
+    const g = gesture.current;
+    if (!g) return;
+    const dx = e.clientX - g.startX;
+    const dy = e.clientY - g.startY;
+    if (!g.dragging) {
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return; // sous le seuil → clic potentiel
+      g.dragging = true;
+    }
+    setDrag({ dx, dy });
+    // Surlignage du créneau cible : ne notifier que sur changement de cible.
+    // On neutralise la carte tirée au hit-test pour viser la colonne survolée
+    // et non sa colonne d'origine (drop inter-jours, AC 3).
+    const target = resolveDropTarget(e.clientX, e.clientY, e.currentTarget);
+    const next = target ? { day: target.day, slotIndex: target.slotIndex } : null;
+    if (!sameTarget(g.lastTarget, next)) {
+      g.lastTarget = next;
+      onDropTargetChange?.(next);
+    }
+  }
+
+  function handlePointerUp(e: React.PointerEvent<HTMLButtonElement>) {
+    const g = gesture.current;
+    gesture.current = null;
+    if (g) {
+      const el = e.currentTarget;
+      if (typeof el.releasePointerCapture === "function") {
+        try {
+          el.releasePointerCapture(g.pointerId);
+        } catch {
+          /* sans effet si la capture n'a pas été posée. */
+        }
+      }
+    }
+    setDrag(null);
+    if (!g?.dragging) return; // simple clic : laisser onClick ouvrir le détail
+    // Drag terminé : supprimer le clic d'ouverture et résoudre la cible.
+    suppressClick.current = true;
+    onDropTargetChange?.(null);
+    const target = resolveDropTarget(e.clientX, e.clientY, e.currentTarget);
+    // Hors zone → annulation (aucun onMove ; la carte revient à sa position).
+    if (target) {
+      onMove?.(appointment, target.day, target.slotIndex);
+    }
+  }
+
+  function handlePointerCancel() {
+    const g = gesture.current;
+    gesture.current = null;
+    setDrag(null);
+    if (g?.dragging) onDropTargetChange?.(null);
+  }
+
+  function handleClick() {
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      return;
+    }
+    onSelect?.(appointment);
+  }
   // Accent secondaire (story 7.3) : pastille de couleur du service par-dessus le
   // fond de statut. Rendu uniquement si le RDV est rattaché à un service.
   const serviceDot = serviceColor ? getServiceColor(serviceColor).dot : null;
@@ -125,22 +269,43 @@ export function AppointmentCard({ appointment, onSelect }: AppointmentCardProps)
   return (
     <button
       type="button"
-      onClick={() => onSelect?.(appointment)}
+      onClick={handleClick}
+      onPointerDown={isDraggable ? handlePointerDown : undefined}
+      onPointerMove={isDraggable ? handlePointerMove : undefined}
+      onPointerUp={isDraggable ? handlePointerUp : undefined}
+      onPointerCancel={isDraggable ? handlePointerCancel : undefined}
       className={cn(
         // Positionnement absolu dans la colonne jour, avec 4px de respiration latérale
         "absolute inset-x-1 z-10 flex items-center gap-1.5 overflow-hidden rounded-md px-1.5 shadow-xs",
-        // Transitions douces : ombre + léger lift au hover (passe au-dessus des voisines)
-        "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:z-20",
+        // Transitions douces : ombre + léger lift au hover (passe au-dessus des voisines).
+        // Désactivées pendant le drag pour un suivi 1:1 du pointeur (pas de lag).
+        !drag && "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:z-20",
         // Apparition douce
         "animate-in fade-in slide-in-from-left-1 duration-300",
         // Tokens de statut (fond + barre gauche + couleur de texte)
         styles.container,
         styles.text,
-        // Curseur selon l'interactivité
-        onSelect ? "cursor-pointer" : "cursor-default"
+        // Curseur : saisissable au repos, « grabbing » pendant le drag (AC 1).
+        isDraggable
+          ? drag
+            ? "cursor-grabbing"
+            : "cursor-grab"
+          : onSelect
+            ? "cursor-pointer"
+            : "cursor-default",
+        // Carte « soulevée » pendant le drag : passe au-dessus des voisines,
+        // ombre marquée + légère opacité (retour visuel, AC 1).
+        drag && "z-50 scale-[1.02] opacity-90 shadow-lg ring-1 ring-primary/30"
       )}
       // Position par heure de début ; hauteur fixe pour uniformité visuelle.
-      style={{ top, height: CARD_HEIGHT_PX }}
+      // Pendant le drag, on translate la carte pour suivre le pointeur ;
+      // `touch-action: none` empêche le scroll tactile de voler le geste.
+      style={{
+        top,
+        height: CARD_HEIGHT_PX,
+        transform: drag ? `translate(${drag.dx}px, ${drag.dy}px)` : undefined,
+        touchAction: isDraggable ? "none" : undefined,
+      }}
       aria-label={`Rendez-vous ${fullName} de ${timeRange}, ${durationLabel}, statut ${status}`}
       title={`${fullName} · ${timeRange} · ${type ?? ""}`.trim()}
     >

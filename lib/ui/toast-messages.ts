@@ -13,6 +13,7 @@ export const TOAST_MESSAGES = {
   appointment: {
     created: "Rendez-vous créé.",
     updated: "Rendez-vous modifié.",
+    moved: "Rendez-vous déplacé.",
     cancelled: "Rendez-vous annulé.",
     deleted: "Rendez-vous supprimé.",
     statusUpdated: "Statut du rendez-vous mis à jour.",
