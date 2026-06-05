@@ -24,6 +24,7 @@ import {
   CalendarRange,
   ChevronLeft,
   ChevronRight,
+  LayoutGrid,
   Plus,
   Sun,
 } from "lucide-react";
@@ -39,17 +40,22 @@ import {
 const VIEW_OPTIONS: { value: ViewMode; label: string; Icon: typeof Sun }[] = [
   { value: "day", label: "Jour", Icon: Sun },
   { value: "week", label: "Semaine", Icon: CalendarRange },
+  { value: "month", label: "Mois", Icon: LayoutGrid },
 ];
 
 /**
- * Construit le titre de la période selon le mode (jour ou semaine).
+ * Construit le titre de la période selon le mode (jour, semaine ou mois).
  * - Jour: "Mercredi 29 janvier 2026"
  * - Semaine (même mois): "Semaine du 18 au 24 mai"
  * - Semaine (mois différents): "Semaine du 28 avr. au 4 mai"
+ * - Mois: "Juin 2026" (le <h2> porte déjà `capitalize`)
  */
 function getPeriodTitle(pivotDate: Date, viewMode: ViewMode): string {
   if (viewMode === "day") {
     return format(pivotDate, "EEEE d MMMM yyyy", { locale: fr });
+  }
+  if (viewMode === "month") {
+    return format(pivotDate, "MMMM yyyy", { locale: fr });
   }
   const start = startOfWeek(pivotDate, { weekStartsOn: 1 });
   const end = addDays(start, 6);

@@ -35,6 +35,12 @@ import {
   getSlotStartTime,
   type CalendarTimeOff,
 } from "@/components/calendar/CalendarGrid";
+import { MonthGrid } from "@/components/calendar/MonthGrid";
+import { getMonthFetchRange } from "@/components/calendar/month-utils";
+import {
+  GRID_START_HOUR,
+  GRID_END_HOUR,
+} from "@/components/calendar/calendar-utils";
 import { CalendarSkeleton } from "@/components/calendar/CalendarSkeleton";
 import { CalendarHeader } from "@/components/calendar/CalendarHeader";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -52,15 +58,12 @@ import {
 } from "@/stores/useCalendarStore";
 import type { AppointmentWithPatient } from "@/types";
 
-/** Heure de début de la grille (pour calcul de la plage de fetch) */
-const GRID_START_HOUR = 8;
-/** Heure de fin de la grille */
-const GRID_END_HOUR = 20;
-
 /**
  * Calcule la plage [startDate, endDate] pour la requête selon la vue.
  * - Jour: le jour pivot de 8h à 20h.
- * - Semaine / Mois (hors périmètre vue mois): du lundi 8h au dimanche 20h de la semaine du pivot.
+ * - Semaine: du lundi 8h au dimanche 20h de la semaine du pivot.
+ * - Mois (story 8.3): toutes les cellules visibles (lundi de la 1ʳᵉ semaine 8h →
+ *   dimanche de la dernière semaine 20h), délégué à `getMonthFetchRange`.
  */
 function getDateRange(
   pivotDate: Date,
@@ -70,6 +73,9 @@ function getDateRange(
     const start = setHours(pivotDate, GRID_START_HOUR);
     const end = setHours(pivotDate, GRID_END_HOUR);
     return { startDate: start, endDate: end };
+  }
+  if (viewMode === "month") {
+    return getMonthFetchRange(pivotDate);
   }
   const startOfWeekDate = startOfWeek(pivotDate, { weekStartsOn: 1 });
   const startDate = setHours(startOfWeekDate, GRID_START_HOUR);
@@ -98,6 +104,8 @@ export default function CalendarPage() {
   const showCancelled = useCalendarStore((s) => s.showCancelled);
   const getAppointments = useCalendarStore((s) => s.getAppointments);
   const setAppointments = useCalendarStore((s) => s.setAppointments);
+  const setDate = useCalendarStore((s) => s.setDate);
+  const setViewMode = useCalendarStore((s) => s.setViewMode);
 
   const [loading, setLoading] = useState(false);
   /** Créneau cible surligné pendant un glisser-déposer (story 8.2). */
@@ -242,6 +250,19 @@ export default function CalendarPage() {
     setCreateModalOpen(true);
   }, []);
 
+  /**
+   * Drill-down vue mois → vue jour (story 8.3, AC 6) : on positionne la date
+   * pivot sur le jour cliqué puis on bascule en vue jour. Le changement de
+   * `cacheKey` (mois → jour) re-déclenche le fetch via l'effet existant.
+   */
+  const handleSelectDay = useCallback(
+    (date: Date) => {
+      setDate(date);
+      setViewMode("day");
+    },
+    [setDate, setViewMode]
+  );
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -275,6 +296,15 @@ export default function CalendarPage() {
           <div className="min-w-0 flex-1 overflow-auto md:overflow-visible">
             {loading && appointments.length === 0 ? (
               <CalendarSkeleton />
+            ) : viewMode === "month" ? (
+              /* Vue mois (story 8.3) : on affiche toujours la grille, même vide
+                 (les jours libres sont l'information utile) — pas d'EmptyState. */
+              <MonthGrid
+                pivotDate={pivotDate}
+                appointmentsByDay={byDay}
+                timeOffs={timeOffs}
+                onSelectDay={handleSelectDay}
+              />
             ) : viewMode === "day" && activeAppointmentCount === 0 ? (
               <EmptyState
                 icon={CalendarOff}

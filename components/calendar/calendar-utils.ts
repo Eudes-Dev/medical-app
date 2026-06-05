@@ -33,6 +33,13 @@ export const SLOT_COUNT = (GRID_END_HOUR - GRID_START_HOUR) * 2;
 export const SLOT_HEIGHT_PX = 30;
 
 /**
+ * Seuil au-delà duquel une journée est considérée comme « surchargée » et mise
+ * en évidence (teinte `rose` + badge). Source unique de vérité (DRY, story 8.3)
+ * partagée par la vue jour/semaine (`CalendarGrid`) et la vue mois (`MonthGrid`).
+ */
+export const OVERLOAD_THRESHOLD = 12;
+
+/**
  * Couleurs des statuts pour le calendrier (Story 3.2 Dev Notes).
  * - CONFIRMED: Emerald-500 | PENDING: Amber-500 | CANCELLED: Rose-500 | COMPLETED: gris
  */

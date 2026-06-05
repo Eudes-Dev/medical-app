@@ -1,0 +1,44 @@
+schema: 1
+story: "8.3"
+story_title: "Vue mois de l'agenda (+ drill-down vers le jour)"
+gate: PASS
+status_reason: "Vue mois activée proprement (header, titre, plage de fetch, MonthGrid, drill-down) en lecture seule, sans toucher store/Server Action/schéma. Tous les AC couverts, baseline verte 548/548, aucun problème bloquant."
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-05T00:20:00Z"
+
+top_issues: []
+waiver: { active: false }
+
+quality_score: 95
+expires: "2026-06-19T00:00:00Z"
+
+evidence:
+  tests_reviewed: 16
+  risks_identified: 0
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: "Vue lecture seule ; aucune écriture/Server Action nouvelle ; requireUser() déjà appliqué sur l'action de fetch réutilisée."
+  performance:
+    status: PASS
+    notes: "findTimeOffForDay O(cells × timeOffs) ≤ 42×N négligeable ; cache RDV par clé YYYY-MM évite les refetch."
+  reliability:
+    status: PASS
+    notes: "Helpers purs déterministes ; convention heure locale cohérente avec le dashboard ; aucun helper Paris (REL-001) introduit."
+  maintainability:
+    status: PASS
+    notes: "DRY (OVERLOAD_THRESHOLD + GRID hours partagés) ; MonthGrid distinct de CalendarGrid ; bien documenté ; ESLint/tsc OK."
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Harmoniser findTimeOffForDay avec le filtrage allDay de lib/cabinet/time-off (ou documenter le choix de marquer le jour entier pour un congé partiel)."
+      refs: ["components/calendar/MonthGrid.tsx"]
+    - action: "Ajouter des assertions de test sur la mise en évidence « aujourd'hui » (aria-current) et la teinte de surcharge via vi.setSystemTime."
+      refs: ["tests/component/calendar/month-view.test.tsx"]
+    - action: "Finir la factorisation : migrer la branche jour/semaine de getDateRange vers les constantes GRID_*_HOUR exportées par calendar-utils."
+      refs: ["app/dashboard/calendar/page.tsx"]

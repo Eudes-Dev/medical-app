@@ -42,6 +42,7 @@ import {
   GRID_END_HOUR as HOUR_END,
   SLOT_COUNT,
   SLOT_HEIGHT_PX,
+  OVERLOAD_THRESHOLD,
 } from "./calendar-utils";
 import { DAY_KEY_ATTR } from "./drag-utils";
 
@@ -53,11 +54,10 @@ export interface CalendarTimeOff extends TimeOffInterval {
 }
 
 /**
- * Géométrie de la grille (8h–20h, créneaux de 30 min). Source unique de vérité
- * dans `calendar-utils` (DRY, story 8.2) — réutilisée ici et dans `drag-utils`.
+ * Géométrie de la grille (8h–20h, créneaux de 30 min) et seuil de surcharge :
+ * source unique de vérité dans `calendar-utils` (DRY, stories 8.2/8.3) —
+ * `OVERLOAD_THRESHOLD` est désormais partagé avec la vue mois (`MonthGrid`).
  */
-/** Seuil au-delà duquel une journée est considérée comme "surchargée". */
-const OVERLOAD_THRESHOLD = 12;
 
 /**
  * Génère les libellés d'heures pour la colonne de gauche.
