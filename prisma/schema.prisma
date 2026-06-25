@@ -118,6 +118,20 @@ enum MedicalDocumentCategory {
   OTHER
 }
 
+/// Catégorie d'un antécédent médical (story 9.3).
+enum MedicalHistoryCategory {
+  /// Allergie (médicamenteuse, alimentaire…).
+  ALLERGY
+  /// Traitement en cours.
+  CURRENT_TREATMENT
+  /// Antécédent chirurgical.
+  SURGICAL_HISTORY
+  /// Antécédent familial.
+  FAMILY_HISTORY
+  /// Autre antécédent non catégorisé.
+  OTHER
+}
+
 /// Statut d'une entrée de liste d'attente (story 8.5).
 enum WaitlistStatus {
   /// En attente d'un créneau (seule valeur affichée dans la file active).
@@ -217,6 +231,9 @@ model Patient {
 
   /// Documents médicaux rattachés (story 9.2 ; onDelete Cascade côté MedicalDocument).
   medicalDocuments MedicalDocument[]
+
+  /// Antécédents médicaux structurés (story 9.3 ; onDelete Cascade côté MedicalHistoryEntry).
+  medicalHistoryEntries MedicalHistoryEntry[]
 
   @@map("patients")
 }
@@ -599,4 +616,37 @@ model MedicalDocument {
   /// Index sur patientId pour lister les documents d'un patient.
   @@index([patientId])
   @@map("medical_documents")
+}
+
+/// Antécédent médical structuré rattaché à un patient (story 9.3).
+///
+/// Troisième brique de l'épopée 9 « Dossier patient ». Fond clinique
+/// **structuré et catégorisé** (allergies, traitements en cours, antécédents
+/// chirurgicaux/familiaux), distinct de l'historique daté des consultations
+/// (`ConsultationNote`), des pièces jointes (`MedicalDocument`) et du champ
+/// administratif libre `Patient.notes` (conservé tel quel).
+///
+/// Pas de FK vers `Appointment` : un antécédent n'est pas rattaché à un RDV.
+/// Single-tenant : pas de `userId`/`tenantId`.
+model MedicalHistoryEntry {
+  /// Identifiant unique UUID généré automatiquement
+  id         String   @id @default(uuid())
+  /// ID du patient propriétaire (clé étrangère). onDelete Cascade : un patient
+  /// supprimé purge ses antécédents (cohérent avec ConsultationNote/MedicalDocument).
+  patientId  String   @map("patient_id")
+  /// Catégorie de l'antécédent.
+  category   MedicalHistoryCategory
+  /// Contenu de l'antécédent (texte libre, ≤ 2000 car. validé côté app).
+  content    String
+  /// Date de création (sert au tri récent → ancien dans chaque catégorie).
+  createdAt  DateTime @default(now()) @map("created_at")
+  /// Date de dernière modification
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  /// Patient propriétaire (onDelete Cascade).
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  /// Index sur patientId pour lister les antécédents d'un patient.
+  @@index([patientId])
+  @@map("medical_history_entries")
 }

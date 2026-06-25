@@ -63,6 +63,12 @@ export const TOAST_MESSAGES = {
     deleted: "Document supprimé.",
     uploadFailed: "L'envoi du fichier a échoué. Veuillez réessayer.",
   },
+  // Story 9.3 — antécédents médicaux (fond clinique structuré du dossier patient).
+  medicalHistory: {
+    created: "Antécédent ajouté.",
+    updated: "Antécédent mis à jour.",
+    deleted: "Antécédent supprimé.",
+  },
   // Story 8.5 — liste d'attente. Les comptes dynamiques (« 2 patients en attente
   // pour ce créneau ») sont composés côté composant (pas de clé par valeur).
   waitlist: {

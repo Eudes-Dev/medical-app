@@ -30,9 +30,11 @@ import {
 import { PatientDetailClient } from "@/components/patients/patient-detail";
 import { ConsultationNotes } from "@/components/patients/consultation-notes";
 import { MedicalDocuments } from "@/components/patients/medical-documents";
+import { MedicalHistory } from "@/components/patients/medical-history";
 import { getPatientById } from "@/app/dashboard/patients/actions";
 import { getConsultationNotes } from "@/app/dashboard/patients/consultation-note-actions";
 import { getMedicalDocuments } from "@/app/dashboard/patients/medical-document-actions";
+import { getMedicalHistoryEntries } from "@/app/dashboard/patients/medical-history-actions";
 
 type PatientDetailPageProps = {
   /**
@@ -60,6 +62,9 @@ export default async function PatientDetailPage(
 
   // Story 9.2 — documents médicaux du patient.
   const medicalDocuments = await getMedicalDocuments(id);
+
+  // Story 9.3 — antécédents médicaux structurés du patient.
+  const medicalHistoryEntries = await getMedicalHistoryEntries(id);
 
   return (
     <SidebarProvider>
@@ -94,6 +99,10 @@ export default async function PatientDetailPage(
         {/* Contenu principal: fiche patient */}
         <main className="flex flex-1 flex-col gap-4 p-4 items-center justify-center">
           <PatientDetailClient patient={patient} />
+          {/* Story 9.3 — fond clinique structuré (affiché avant l'historique daté). */}
+          <div className="w-full max-w-5xl">
+            <MedicalHistory patientId={id} entries={medicalHistoryEntries} />
+          </div>
           <div className="w-full max-w-5xl">
             <ConsultationNotes patientId={id} notes={consultationNotes} />
           </div>
