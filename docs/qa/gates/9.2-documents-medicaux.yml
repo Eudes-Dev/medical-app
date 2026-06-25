@@ -1,0 +1,102 @@
+# Quality Gate — Story 9.2 : Documents médicaux
+# Généré par Quinn (Test Architect) via *review.
+schema: 1
+story: "9.2"
+story_title: "Documents médicaux (pièces du dossier patient via Supabase Storage privé)"
+gate: PASS
+status_reason: >-
+  8/8 AC couverts. Modèle MedicalDocument + enum + migration non destructive ;
+  abstraction Storage (bucket privé, URL signées, aucune URL publique) ; 4 Server Actions
+  sécurisées (requireUser + assertValidUuid + Zod + allowlist MIME + plafond 10 Mo) ;
+  chemin de stockage dérivé du mime (anti-traversal) ; UI fiche patient (ajout/upload/
+  téléchargement/suppression) avec rollback. Suite complète verte (72 fichiers / 670 tests,
+  +22 vs baseline, aucune régression). Build OK. Conforme à l'ADR §5.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-25T14:10:00Z"
+
+waiver:
+  active: false
+
+quality_score: 95
+
+top_issues:
+  - id: RGPD-PROD-921
+    severity: medium
+    finding: >-
+      Données de santé (art. 9 RGPD). Le socle est sécurisé (bucket privé, URL signées,
+      requireUser, allowlist) mais le chiffrement applicatif (11.4), l'audit des accès (11.3)
+      et le consentement/droit à l'oubli (11.1/11.2) ne sont pas livrés.
+    status: accepted_by_design
+    mitigation: >-
+      Mise en PRODUCTION conditionnée à un arbitrage PO/RGPD (épopée 11). Réserve documentée
+      dans la story (en-tête) et l'ADR §5. La story reste développable/testable en dev/preview.
+
+# Réserve relevée à la 1re passe de revue — corrigée pendant la revue (test ajouté, dans le périmètre).
+resolved_issues:
+  - id: REL-COV-921
+    was: low
+    resolution: >-
+      Lacune de couverture : l'échec de génération d'URL d'upload n'était pas testé. Ajout du
+      scénario 9.2-INT-013 vérifiant qu'aucune ligne orpheline n'est créée (pas de prisma.create,
+      pas de revalidatePath) si createUploadUrl échoue. 13/13 verts sur le périmètre 9.2.
+
+quality_score_notes: >-
+  95 (−5 pour la réserve RGPD-PROD-921, organisationnelle/produit et non un défaut de code).
+
+evidence:
+  tests_reviewed: 22
+  tests_status: "22/22 verts sur le périmètre 9.2 (unit 9, integration 13)"
+  full_baseline: "72 fichiers / 670 tests verts (baseline 70/648 + 2 fichiers / 22 tests 9.2)"
+  risk_summary: >-
+    Risque technique faible : feature additive single-tenant, orthogonale au cœur agenda ;
+    migration non destructive ; binaire isolé en bucket privé ; storagePath jamais exposé.
+    Risque de conformité (RGPD) porté hors code par RGPD-PROD-921.
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+    notes: >-
+      AC1/AC8 (modèle, cascade patient) validés au niveau FK schéma+migration (non
+      unit-testables sans base, cohérent avec 8.5/9.1). AC4 (abstraction Storage) couvert
+      indirectement via mocks ; l'I/O Supabase réel + bucket/RLS = étape ops hors boucle.
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >-
+      `requireUser()` en tête des 4 actions (testé : non-auth → UnauthorizedError / échec sans
+      Prisma). `assertValidUuid()` sur tout id avant Prisma/Storage (testé). Allowlist MIME +
+      plafond 10 Mo côté client ET serveur (testé). Chemin dérivé du mime (anti-traversal, testé).
+      Bucket privé + URL signées courtes (TTL ≤ 60 s) ; aucune URL publique ; `storagePath` non
+      exposé au client (testé : absent de MedicalDocumentData).
+  performance:
+    status: PASS
+    notes: >-
+      Index `medical_documents(patient_id)`. Tri `createdAt desc` en base. Upload binaire direct
+      navigateur → Storage (ne transite pas par le serveur applicatif). Volumétrie par patient
+      faible en single-tenant.
+  reliability:
+    status: PASS
+    notes: >-
+      Upload à 2 temps avec rollback de la ligne si l'upload binaire échoue (UI) ; aucune ligne
+      orpheline si l'URL d'upload échoue (9.2-INT-013) ; suppression best-effort de l'objet puis
+      de la ligne (évite la ligne fantôme). Erreurs mappées FR sans fuite d'id.
+  maintainability:
+    status: PASS
+    notes: >-
+      Patterns du dépôt respectés (forme de retour des actions calquée sur 9.1, harnais de test
+      identique). Validation pure (testable unit) ; abstraction Storage fine et mockable ;
+      JSDoc soignée ; libellés via TOAST_MESSAGES.
+
+recommendations:
+  immediate:
+    - action: "OPS : créer le bucket privé Supabase + politiques RLS/Storage et définir SUPABASE_MEDICAL_DOCS_BUCKET ; appliquer la migration en base. Étapes de déploiement standard, non exécutées par la boucle."
+      refs: ["lib/storage/medical-documents.ts", "prisma/migrations/20260625000012_add_medical_documents/migration.sql", "docs/architecture/5-stockage-fichiers-decision.md"]
+    - action: "PO/RGPD : arbitrer l'exposition en production (RGPD-PROD-921) avant d'activer la feature pour de vrais documents patients."
+      refs: ["docs/architecture/5-stockage-fichiers-decision.md", "docs/stories/9.2.documents-medicaux.story.md"]
+  future:
+    - action: "Épopée 11 : chiffrement applicatif (11.4), journal d'audit des accès documents (11.3), consentement/droit à l'oubli/export (11.1/11.2)."
+      refs: ["docs/stories/ROADMAP.md"]
+    - action: "Nettoyage applicatif des objets Storage à la suppression d'un patient (la cascade SQL ne purge que les lignes — cf. ADR §5.5)."
+      refs: ["app/dashboard/patients/medical-document-actions.ts", "app/dashboard/patients/actions.ts"]
+    - action: "Couverture E2E (Playwright) du parcours documents une fois l'infra E2E disponible (cf. 3.6/5.2)."
+      refs: ["tests/e2e/"]

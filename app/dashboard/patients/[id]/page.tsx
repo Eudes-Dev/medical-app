@@ -29,8 +29,10 @@ import {
 } from "@/components/ui/sidebar";
 import { PatientDetailClient } from "@/components/patients/patient-detail";
 import { ConsultationNotes } from "@/components/patients/consultation-notes";
+import { MedicalDocuments } from "@/components/patients/medical-documents";
 import { getPatientById } from "@/app/dashboard/patients/actions";
 import { getConsultationNotes } from "@/app/dashboard/patients/consultation-note-actions";
+import { getMedicalDocuments } from "@/app/dashboard/patients/medical-document-actions";
 
 type PatientDetailPageProps = {
   /**
@@ -55,6 +57,9 @@ export default async function PatientDetailPage(
 
   // Story 9.1 — historique des notes de consultation du patient.
   const consultationNotes = await getConsultationNotes(id);
+
+  // Story 9.2 — documents médicaux du patient.
+  const medicalDocuments = await getMedicalDocuments(id);
 
   return (
     <SidebarProvider>
@@ -91,6 +96,9 @@ export default async function PatientDetailPage(
           <PatientDetailClient patient={patient} />
           <div className="w-full max-w-5xl">
             <ConsultationNotes patientId={id} notes={consultationNotes} />
+          </div>
+          <div className="w-full max-w-5xl">
+            <MedicalDocuments patientId={id} documents={medicalDocuments} />
           </div>
         </main>
       </SidebarInset>

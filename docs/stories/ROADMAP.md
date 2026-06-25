@@ -97,7 +97,7 @@ Ces stories ont été **retirées du dépôt** ; elles sont conservées ici comm
 | Épopée | Stories | Thème |
 |---|---|---|
 | 8 | ~~8.1 annulation/reprogrammation~~ **→ promue au périmètre actif (Approved, 2026-06-04)** · 8.2 drag-and-drop · 8.3 vues jour/mois · 8.4 RDV récurrents · 8.5 liste d'attente | Agenda avancé |
-| 9 | 9.1 notes de consultation · 9.2 documents médicaux · 9.3 antécédents | Dossier patient |
+| 9 | 9.1 notes de consultation **(Done)** · 9.2 documents médicaux **(Done — prod conditionnée RGPD)** · 9.3 antécédents | Dossier patient |
 | 10 | 10.1 statistiques avancées · 10.2 export données | Analytics |
 | 11 | 11.1 consentement RGPD · 11.2 droit à l'oubli/export · 11.3 journal d'audit · 11.4 chiffrement | RGPD / Sécurité |
 | 12 | 12.1 acompte Stripe · 12.2 facturation PDF | Paiement (dépend de 7.3) |
@@ -124,3 +124,4 @@ Ces stories ont été **retirées du dépôt** ; elles sont conservées ici comm
 |---|---|---|---|
 | 2026-05-30 | 1.0 | Reconstruction du ROADMAP supprimé. Ré-ancrage de la dette transverse vers la story 5.3. Reclassement explicite des épopées 8→18 en backlog post-MVP. | PO (Sarah) |
 | 2026-06-04 | 1.1 | Statut 5.3 réconcilié (périmètre mergé, commit `c09e8cb`). Story 8.1 (reprogrammation patient self-service) promue du backlog au périmètre actif (Approved) ; 8.2→8.5 restent au backlog. | PO (Sarah) |
+| 2026-06-25 | 1.2 | Épopée 9 ouverte : 9.1 (notes) et 9.2 (documents médicaux) → Done. ADR §5 « Stockage de fichiers » acté ([architecture/5](../architecture/5-stockage-fichiers-decision.md)). 9.2 : mise en production conditionnée à un arbitrage RGPD (épopée 11). | Architect / SM / Dev / QA (boucle BMAD) |

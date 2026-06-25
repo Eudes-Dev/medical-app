@@ -100,6 +100,24 @@ enum WaitlistPriority {
   URGENT
 }
 
+/// Catégorie d'un document médical (story 9.2).
+///
+/// Sert au classement/filtrage des pièces du dossier patient. Liste fermée
+/// (enum) cohérente avec les autres enums du domaine ; `OTHER` couvre les cas
+/// non catégorisés.
+enum MedicalDocumentCategory {
+  /// Ordonnance.
+  PRESCRIPTION
+  /// Compte rendu (consultation, opératoire…).
+  REPORT
+  /// Imagerie médicale (radio, IRM, échographie…).
+  IMAGING
+  /// Résultat d'analyses (biologie…).
+  ANALYSIS
+  /// Autre document non catégorisé.
+  OTHER
+}
+
 /// Statut d'une entrée de liste d'attente (story 8.5).
 enum WaitlistStatus {
   /// En attente d'un créneau (seule valeur affichée dans la file active).
@@ -196,6 +214,9 @@ model Patient {
 
   /// Historique des notes de consultation (story 9.1 ; onDelete Cascade côté ConsultationNote).
   consultationNotes ConsultationNote[]
+
+  /// Documents médicaux rattachés (story 9.2 ; onDelete Cascade côté MedicalDocument).
+  medicalDocuments MedicalDocument[]
 
   @@map("patients")
 }
@@ -539,4 +560,43 @@ model ConsultationNote {
   /// Index sur appointmentId pour retrouver les notes d'un RDV.
   @@index([appointmentId])
   @@map("consultation_notes")
+}
+
+/// Document médical rattaché à un patient (story 9.2).
+///
+/// Deuxième brique de l'épopée 9 « Dossier patient ». Conformément à l'ADR
+/// stockage de fichiers (docs/architecture/5-stockage-fichiers-decision.md), ce
+/// modèle ne persiste que les **métadonnées** : le binaire vit dans un bucket
+/// Supabase Storage privé, référencé par `storagePath` (chemin opaque
+/// `patients/{patientId}/{uuid}.{ext}`). Aucune URL publique n'est stockée.
+///
+/// Single-tenant : pas de `userId`/`tenantId`.
+model MedicalDocument {
+  /// Identifiant unique UUID généré automatiquement
+  id          String   @id @default(uuid())
+  /// ID du patient propriétaire (clé étrangère). onDelete Cascade : un patient
+  /// supprimé purge ses documents (cohérent avec ConsultationNote/WaitlistEntry).
+  /// ⚠️ La cascade SQL ne supprime PAS les objets Storage (cf. ADR §5.5).
+  patientId   String   @map("patient_id")
+  /// Chemin opaque de l'objet dans le bucket privé (jamais exposé au client).
+  storagePath String   @map("storage_path")
+  /// Nom de fichier d'origine (affiché ; jamais utilisé comme chemin — anti-traversal).
+  fileName    String   @map("file_name")
+  /// Type MIME validé (allowlist : application/pdf, image/jpeg, image/png).
+  mimeType    String   @map("mime_type")
+  /// Taille en octets (≤ 10 Mo, validé côté app).
+  sizeBytes   Int      @map("size_bytes")
+  /// Catégorie de classement du document.
+  category    MedicalDocumentCategory @default(OTHER)
+  /// Date de création (sert au tri récent → ancien).
+  createdAt   DateTime @default(now()) @map("created_at")
+  /// Date de dernière modification
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  /// Patient propriétaire (onDelete Cascade).
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  /// Index sur patientId pour lister les documents d'un patient.
+  @@index([patientId])
+  @@map("medical_documents")
 }

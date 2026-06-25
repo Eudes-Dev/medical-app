@@ -57,6 +57,12 @@ export const TOAST_MESSAGES = {
     updated: "Note de consultation modifiée.",
     deleted: "Note de consultation supprimée.",
   },
+  // Story 9.2 — documents médicaux (pièces du dossier patient).
+  medicalDocument: {
+    added: "Document ajouté.",
+    deleted: "Document supprimé.",
+    uploadFailed: "L'envoi du fichier a échoué. Veuillez réessayer.",
+  },
   // Story 8.5 — liste d'attente. Les comptes dynamiques (« 2 patients en attente
   // pour ce créneau ») sont composés côté composant (pas de clé par valeur).
   waitlist: {
