@@ -41,12 +41,20 @@ import { PatientSelect } from "@/components/calendar/PatientSelect";
 import {
   appointmentSchema,
   APPOINTMENT_DURATIONS,
+  RECURRENCE_MIN_OCCURRENCES,
+  RECURRENCE_MAX_OCCURRENCES,
   type AppointmentFormValues,
 } from "@/lib/validations/appointment";
 import {
   createAppointment,
+  createRecurringAppointments,
   updateAppointment,
 } from "@/app/dashboard/calendar/actions";
+import { Switch } from "@/components/ui/switch";
+import {
+  buildRecurrenceDates,
+  type RecurrenceFrequency,
+} from "@/components/calendar/recurrence-utils";
 import {
   getServiceTypes,
   type ServiceTypeDTO,
@@ -89,6 +97,29 @@ const DURATION_LABELS: Record<number, string> = {
   60: "1h",
   90: "1h30",
 };
+
+/** Libellés FR des fréquences de récurrence (story 8.4). */
+const FREQUENCY_LABELS: Record<RecurrenceFrequency, string> = {
+  weekly: "Hebdomadaire",
+  biweekly: "Toutes les 2 semaines",
+  monthly: "Mensuelle",
+};
+
+/** Nombre d'occurrences par défaut d'une nouvelle série (story 8.4). */
+const DEFAULT_OCCURRENCES = 4;
+
+/**
+ * Ramène un nombre d'occurrences saisi dans les bornes valides [2,26] (story 8.4).
+ * Garantit que l'aperçu **et** la valeur soumise restent cohérents même si le
+ * champ contient une saisie hors bornes / vide (`NaN`).
+ */
+function clampOccurrences(n: number): number {
+  if (!Number.isFinite(n)) return RECURRENCE_MIN_OCCURRENCES;
+  return Math.min(
+    RECURRENCE_MAX_OCCURRENCES,
+    Math.max(RECURRENCE_MIN_OCCURRENCES, Math.trunc(n)),
+  );
+}
 
 /** Libellé court d'une durée pour les options de la liste de services. */
 function shortDuration(min: number): string {
@@ -177,6 +208,12 @@ export function CreateAppointmentModal({
   /** Service sélectionné. `""` = repli / RDV legacy (type libre conservé). */
   const [selectedServiceId, setSelectedServiceId] = useState<string>("");
 
+  // Récurrence (story 8.4) — état **local** (hors `appointmentSchema`), rendu
+  // uniquement en création (`!isEdit`). Désactivée par défaut → flux 3.3 inchangé.
+  const [recurring, setRecurring] = useState(false);
+  const [frequency, setFrequency] = useState<RecurrenceFrequency>("weekly");
+  const [occurrences, setOccurrences] = useState<number>(DEFAULT_OCCURRENCES);
+
   // Durée déduite du RDV en édition (sinon valeur par défaut = recommandée).
   const initialDuration = useMemo(() => {
     if (!editAppointment) return RECOMMENDED_DURATION;
@@ -217,6 +254,23 @@ export function CreateAppointmentModal({
     if (!(watchedStart instanceof Date)) return null;
     return new Date(watchedStart.getTime() + watchedDuration * 60_000);
   }, [watchedStart, watchedDuration]);
+
+  // Nombre d'occurrences effectif (clampé) — source unique pour l'aperçu ET la
+  // soumission, pour qu'ils ne divergent jamais (QA 8.4).
+  const effectiveOccurrences = clampOccurrences(occurrences);
+  // La saisie brute est-elle hors bornes / vide ? → validation inline.
+  const occurrencesOutOfRange =
+    !Number.isInteger(occurrences) ||
+    occurrences < RECURRENCE_MIN_OCCURRENCES ||
+    occurrences > RECURRENCE_MAX_OCCURRENCES;
+
+  // Aperçu des dates de la série (story 8.4) : recalculé à la volée depuis la
+  // date de début, la fréquence et le nombre d'occurrences. Reflète exactement
+  // les créneaux qui seront tentés (même heure de début que la 1ʳᵉ occurrence).
+  const recurrenceDates = useMemo(() => {
+    if (!recurring || !(watchedStart instanceof Date)) return [];
+    return buildRecurrenceDates(watchedStart, frequency, effectiveOccurrences);
+  }, [recurring, watchedStart, frequency, effectiveOccurrences]);
 
   // Chargement des services actifs à l'ouverture.
   useEffect(() => {
@@ -259,6 +313,10 @@ export function CreateAppointmentModal({
       });
       setSelectedServiceId("");
     }
+    // Récurrence remise à zéro à chaque (ré)ouverture (story 8.4).
+    setRecurring(false);
+    setFrequency("weekly");
+    setOccurrences(DEFAULT_OCCURRENCES);
   }, [open, defaultStartTime, editAppointment, initialDuration, reset]);
 
   // En création, présélectionne le premier service actif et pré-remplit la durée.
@@ -298,6 +356,35 @@ export function CreateAppointmentModal({
         type: svc ? svc.label : (editAppointment?.type ?? "Consultation"),
       };
 
+      // Story 8.4 : récurrence active (création uniquement) → série de RDV.
+      if (!isEdit && recurring) {
+        // Valeur clampée [2,26] — alignée sur l'aperçu (jamais de mismatch avec
+        // le serveur qui re-valide via recurrenceSchema).
+        const result = await createRecurringAppointments(payload, {
+          frequency,
+          occurrences: effectiveOccurrences,
+        });
+        if (result.success) {
+          // Détail chiffré composé ici depuis le résumé (pas de clé toast par valeur).
+          const base = TOAST_MESSAGES.appointment.seriesCreated;
+          showSuccess(
+            result.skipped > 0
+              ? `${base} ${result.created} créé${result.created > 1 ? "s" : ""}, ${result.skipped} ignoré${result.skipped > 1 ? "s" : ""} (créneaux occupés).`
+              : `${base} ${result.created} rendez-vous programmé${result.created > 1 ? "s" : ""}.`,
+          );
+          clearCache();
+          onOpenChange(false);
+          onSuccess?.();
+        } else {
+          showError(
+            result.slotTaken
+              ? TOAST_MESSAGES.errors.slotTaken
+              : TOAST_MESSAGES.errors.server,
+          );
+        }
+        return;
+      }
+
       const action =
         isEdit && editAppointment
           ? () => updateAppointment(editAppointment.id, payload)
@@ -316,13 +403,24 @@ export function CreateAppointmentModal({
         onSuccess?.();
       } else {
         showError(
-          result.error?.includes("occupé")
+          result.slotTaken
             ? TOAST_MESSAGES.errors.slotTaken
             : TOAST_MESSAGES.errors.server,
         );
       }
     },
-    [services, selectedServiceId, clearCache, isEdit, editAppointment, onOpenChange, onSuccess],
+    [
+      services,
+      selectedServiceId,
+      clearCache,
+      isEdit,
+      editAppointment,
+      onOpenChange,
+      onSuccess,
+      recurring,
+      frequency,
+      effectiveOccurrences,
+    ],
   );
 
   return (
@@ -530,6 +628,124 @@ export function CreateAppointmentModal({
               </p>
             )}
           </div>
+
+          {/* ──────────────── Récurrence (story 8.4) ────────────────
+              Section affichée uniquement en création. Désactivée par défaut →
+              comportement unitaire 3.3 inchangé. */}
+          {!isEdit && (
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <label
+                    htmlFor="recurring"
+                    className="text-sm font-medium leading-none"
+                  >
+                    Rendez-vous récurrent
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Créer toute une série en une fois (même patient, même créneau).
+                  </p>
+                </div>
+                <Switch
+                  id="recurring"
+                  checked={recurring}
+                  onCheckedChange={setRecurring}
+                  aria-label="Activer la récurrence"
+                />
+              </div>
+
+              {recurring && (
+                <div className="space-y-3 pt-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Fréquence */}
+                    <div className="space-y-1.5">
+                      <SectionLabel htmlFor="frequency">Fréquence</SectionLabel>
+                      <select
+                        id="frequency"
+                        value={frequency}
+                        onChange={(e) =>
+                          setFrequency(e.target.value as RecurrenceFrequency)
+                        }
+                        className={cn(
+                          "h-10 w-full appearance-none rounded-lg border bg-background px-3 text-sm shadow-xs transition-colors border-input",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:border-emerald-500",
+                        )}
+                      >
+                        {(
+                          Object.keys(FREQUENCY_LABELS) as RecurrenceFrequency[]
+                        ).map((f) => (
+                          <option key={f} value={f}>
+                            {FREQUENCY_LABELS[f]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Nombre d'occurrences */}
+                    <div className="space-y-1.5">
+                      <SectionLabel htmlFor="occurrences">
+                        Nombre de RDV
+                      </SectionLabel>
+                      <input
+                        id="occurrences"
+                        type="number"
+                        min={RECURRENCE_MIN_OCCURRENCES}
+                        max={RECURRENCE_MAX_OCCURRENCES}
+                        value={Number.isFinite(occurrences) ? occurrences : ""}
+                        aria-invalid={occurrencesOutOfRange}
+                        // On stocke la saisie brute (même hors bornes) pour une
+                        // validation inline ; on reclampe à la perte de focus.
+                        onChange={(e) =>
+                          setOccurrences(
+                            e.target.value === "" ? NaN : Number(e.target.value),
+                          )
+                        }
+                        onBlur={() => setOccurrences(effectiveOccurrences)}
+                        className={cn(
+                          "h-10 w-full rounded-lg border bg-background px-3 text-sm shadow-xs transition-colors border-input tabular-nums",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:border-emerald-500",
+                          occurrencesOutOfRange &&
+                            "border-rose-500 focus-visible:ring-rose-500/40",
+                        )}
+                      />
+                      {occurrencesOutOfRange && (
+                        <p className="text-[11px] text-rose-500" role="alert">
+                          Entre {RECURRENCE_MIN_OCCURRENCES} et{" "}
+                          {RECURRENCE_MAX_OCCURRENCES} rendez-vous (ajusté à{" "}
+                          {effectiveOccurrences}).
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Aperçu des dates générées */}
+                  {recurrenceDates.length > 0 && (
+                    <div className="space-y-1">
+                      <SectionLabel>
+                        Aperçu ({recurrenceDates.length} dates)
+                      </SectionLabel>
+                      <ul
+                        className="flex flex-wrap gap-1.5 text-xs"
+                        aria-label="Dates de la série"
+                      >
+                        {recurrenceDates.map((d, i) => (
+                          <li
+                            key={i}
+                            className="rounded-md bg-background px-2 py-1 text-muted-foreground tabular-nums shadow-xs"
+                          >
+                            {format(d, "EEE d MMM HH:mm", { locale: fr })}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-[11px] text-muted-foreground">
+                        Les créneaux déjà occupés seront automatiquement ignorés.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </form>
 
         <div className="flex items-center justify-end gap-2 border-t bg-muted/30 px-6 py-4">

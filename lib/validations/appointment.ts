@@ -82,3 +82,33 @@ export const appointmentSchema = z.object({
 
 /** Type inféré pour les valeurs du formulaire rendez-vous */
 export type AppointmentFormValues = z.infer<typeof appointmentSchema>;
+
+/**
+ * Bornes du nombre d'occurrences d'une série récurrente (story 8.4).
+ * Min 2 (une « série » d'une seule occurrence n'a pas de sens) ; max 26
+ * (≈ 6 mois en hebdomadaire) pour borner le coût de génération côté serveur.
+ */
+export const RECURRENCE_MIN_OCCURRENCES = 2;
+export const RECURRENCE_MAX_OCCURRENCES = 26;
+
+/**
+ * Schéma de validation de la récurrence (story 8.4).
+ *
+ * **Séparé** d'`appointmentSchema` (inchangé) : le formulaire ne soumet la
+ * récurrence que si l'interrupteur est actif ; sinon il appelle `createAppointment`
+ * comme aujourd'hui (zéro régression du flux unitaire). La 1ʳᵉ occurrence (date de
+ * départ) reste validée par `appointmentSchema` (dont la règle « futur »).
+ */
+export const recurrenceSchema = z.object({
+  /** Fréquence de répétition (hebdo / toutes les 2 semaines / mensuelle). */
+  frequency: z.enum(["weekly", "biweekly", "monthly"]),
+  /** Nombre total de RDV de la série (1ʳᵉ incluse), borné. */
+  occurrences: z
+    .number()
+    .int()
+    .min(RECURRENCE_MIN_OCCURRENCES, "Au moins 2 occurrences")
+    .max(RECURRENCE_MAX_OCCURRENCES, "26 occurrences maximum"),
+});
+
+/** Type inféré pour les valeurs de récurrence */
+export type RecurrenceFormValues = z.infer<typeof recurrenceSchema>;

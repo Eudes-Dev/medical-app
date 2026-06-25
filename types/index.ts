@@ -192,6 +192,11 @@ export interface Appointment {
   /** FK vers le type de soin rattaché (story 7.3) ; null pour les RDV legacy. */
   serviceTypeId?: string | null;
   /**
+   * Identifiant de série groupant les occurrences d'un RDV récurrent (story 8.4).
+   * UUID opaque ; null pour tout RDV non récurrent (et l'historique).
+   */
+  seriesId?: string | null;
+  /**
    * Jeton de couleur du service rattaché (story 7.3), résolu côté serveur pour
    * l'accent secondaire de la carte calendrier. Null si aucun service.
    */
