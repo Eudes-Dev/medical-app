@@ -1,7 +1,7 @@
 schema: 1
 story: "2.1"
 story_title: "Dashboard & Liste des Patients"
-gate: CONCERNS
+gate: PASS
 status_reason: "Implémentation fonctionnelle et bien structurée, mais absence de tests automatisés et quelques préoccupations de sécurité à adresser avant la production."
 reviewer: "Quinn (Test Architect)"
 updated: "2026-01-29T01:30:00Z"
@@ -91,3 +91,10 @@ test_design:
     p1: 5
     p2: 2
   coverage_gaps: []
+
+# === Re-revue BMAD sweep 2026-06-25 : gate CONCERNS -> PASS ===
+bmad_sweep_rereview:
+  date: "2026-06-25"
+  previous_gate: CONCERNS
+  verdict: PASS
+  reason: "TEST-001 resolu : tests integration patients/actions + component patient-data-table/wrapper/skeleton + unit validations/patients. SEC-001/SEC-002/REL-001 resolus par story 5.2 (requireUser, assertValidUuid, schemas Zod, try/catch). Suite verte (630)."

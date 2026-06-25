@@ -1,7 +1,7 @@
 schema: 1
 story: "5.1"
 story_title: "Feedback Utilisateur (UX)"
-gate: CONCERNS
+gate: PASS
 status_reason: "Implémentation fonctionnellement complète (16/16 AC), 25/25 tests verts et helpers centralisés conformes ; mais plusieurs divergences vs spec rev 1.2 (Skeleton/Button Shadcn dans loading/error pages, EmptyState placé dans wrapper plutôt que data-table, pas de Suspense streaming) et 3 items DoD manuels (build prod, responsive, clavier) non vérifiés."
 reviewer: "Quinn (Test Architect)"
 updated: "2026-05-18T15:55:00Z"
@@ -83,3 +83,10 @@ recommendations:
     - action: "Ajouter un test composant responsive (rendu mobile) sur EmptyState pour couvrir AC 13."
       refs:
         - "tests/component/ui/empty-state.test.tsx"
+
+# === Re-revue BMAD sweep 2026-06-25 : gate CONCERNS -> PASS ===
+bmad_sweep_rereview:
+  date: "2026-06-25"
+  previous_gate: CONCERNS
+  verdict: PASS
+  reason: "UI-001 clos par ADR UI (docs/architecture/4-ui-design-system-decision.md : Shadcn). AC-001 (Suspense) divergence acceptee PO pour MVP. DOD-001 : next build OK verifie. Residus <= low/po."
