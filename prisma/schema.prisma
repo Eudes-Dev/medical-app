@@ -194,6 +194,9 @@ model Patient {
   /// Entrées de liste d'attente du patient (story 8.5 ; onDelete Cascade côté WaitlistEntry).
   waitlistEntries WaitlistEntry[]
 
+  /// Historique des notes de consultation (story 9.1 ; onDelete Cascade côté ConsultationNote).
+  consultationNotes ConsultationNote[]
+
   @@map("patients")
 }
 
@@ -263,6 +266,9 @@ model Appointment {
   serviceType ServiceType? @relation(fields: [serviceTypeId], references: [id], onDelete: SetNull)
   /// Logs des messages (email + SMS) envoyés pour ce rendez-vous (story 6.1, étendu en 6.3)
   messageLogs MessageLog[]
+
+  /// Notes de consultation rattachées à ce RDV (story 9.1 ; onDelete SetNull côté ConsultationNote).
+  consultationNotes ConsultationNote[]
 
   /// Index sur patientId pour optimiser les requêtes par patient
   @@index([patientId])
@@ -497,4 +503,40 @@ model WaitlistEntry {
   /// Index sur patientId pour les requêtes par patient.
   @@index([patientId])
   @@map("waitlist_entries")
+}
+
+/// Note de consultation horodatée rattachée à un patient (story 9.1).
+///
+/// Première brique de l'épopée 9 « Dossier patient » : historique clinique
+/// **structuré** (plusieurs entrées datées par patient), distinct du champ libre
+/// unique `Patient.notes` (note administrative one-shot, conservé tel quel).
+///
+/// Une note peut optionnellement être rattachée à un rendez-vous précis
+/// (`appointmentId`). Single-tenant : pas de `userId`/`tenantId`.
+model ConsultationNote {
+  /// Identifiant unique UUID généré automatiquement
+  id            String   @id @default(uuid())
+  /// ID du patient propriétaire (clé étrangère). onDelete Cascade : un patient
+  /// supprimé purge ses notes (cohérent avec Appointment/WaitlistEntry).
+  patientId     String   @map("patient_id")
+  /// FK optionnelle vers le RDV concerné. Null = note non rattachée à un RDV.
+  /// onDelete SetNull : un RDV supprimé détache la note sans la perdre.
+  appointmentId String?  @map("appointment_id")
+  /// Contenu clinique de la note (texte libre, ≤ 5000 car. validé côté app).
+  content       String
+  /// Date de création (sert au tri chronologique récent → ancien).
+  createdAt     DateTime @default(now()) @map("created_at")
+  /// Date de dernière modification
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  /// Patient propriétaire (onDelete Cascade).
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  /// RDV rattaché optionnel (onDelete SetNull ; null = note libre).
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  /// Index sur patientId pour lister les notes d'un patient.
+  @@index([patientId])
+  /// Index sur appointmentId pour retrouver les notes d'un RDV.
+  @@index([appointmentId])
+  @@map("consultation_notes")
 }

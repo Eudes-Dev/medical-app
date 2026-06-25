@@ -28,7 +28,9 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { PatientDetailClient } from "@/components/patients/patient-detail";
+import { ConsultationNotes } from "@/components/patients/consultation-notes";
 import { getPatientById } from "@/app/dashboard/patients/actions";
+import { getConsultationNotes } from "@/app/dashboard/patients/consultation-note-actions";
 
 type PatientDetailPageProps = {
   /**
@@ -50,6 +52,9 @@ export default async function PatientDetailPage(
   if (!patient) {
     notFound();
   }
+
+  // Story 9.1 — historique des notes de consultation du patient.
+  const consultationNotes = await getConsultationNotes(id);
 
   return (
     <SidebarProvider>
@@ -84,6 +89,9 @@ export default async function PatientDetailPage(
         {/* Contenu principal: fiche patient */}
         <main className="flex flex-1 flex-col gap-4 p-4 items-center justify-center">
           <PatientDetailClient patient={patient} />
+          <div className="w-full max-w-5xl">
+            <ConsultationNotes patientId={id} notes={consultationNotes} />
+          </div>
         </main>
       </SidebarInset>
     </SidebarProvider>
