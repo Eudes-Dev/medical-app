@@ -44,6 +44,8 @@ import { getDurationMinutes } from "@/components/calendar/calendar-utils";
 import {
   updateAppointmentStatus,
   deleteAppointment,
+  cancelAppointmentSeries,
+  deleteAppointmentSeries,
 } from "@/app/dashboard/calendar/actions";
 import { useCalendarStore } from "@/stores/useCalendarStore";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -122,6 +124,63 @@ function DetailsContent({
     handleStatusChange("CANCELLED", "Annuler");
   }, [handleStatusChange]);
 
+  // Story 8.4 — gestion de la série « à venir » (à partir de ce RDV).
+  const handleCancelSeries = useCallback(async () => {
+    if (!appointment.seriesId) return;
+    if (
+      !confirm(
+        "Annuler tous les rendez-vous à venir de cette série (à partir de celui-ci) ? Les rendez-vous passés ne sont pas touchés.",
+      )
+    )
+      return;
+    setLoadingAction("AnnulerSérie");
+    try {
+      const result = await cancelAppointmentSeries(
+        appointment.seriesId,
+        appointment.startTime,
+      );
+      if (result.success) {
+        showSuccess(
+          `${TOAST_MESSAGES.appointment.seriesCancelled} ${result.affected} rendez-vous annulé${result.affected > 1 ? "s" : ""}.`,
+        );
+        clearCache();
+        onClose();
+      } else {
+        showError(TOAST_MESSAGES.errors.server);
+      }
+    } finally {
+      setLoadingAction(null);
+    }
+  }, [appointment.seriesId, appointment.startTime, clearCache, onClose]);
+
+  const handleDeleteSeries = useCallback(async () => {
+    if (!appointment.seriesId) return;
+    if (
+      !confirm(
+        "Supprimer définitivement tous les rendez-vous à venir de cette série (à partir de celui-ci) ? Les rendez-vous passés ne sont pas touchés.",
+      )
+    )
+      return;
+    setLoadingAction("SupprimerSérie");
+    try {
+      const result = await deleteAppointmentSeries(
+        appointment.seriesId,
+        appointment.startTime,
+      );
+      if (result.success) {
+        showSuccess(
+          `${TOAST_MESSAGES.appointment.seriesDeleted} ${result.affected} rendez-vous supprimé${result.affected > 1 ? "s" : ""}.`,
+        );
+        clearCache();
+        onClose();
+      } else {
+        showError(TOAST_MESSAGES.errors.server);
+      }
+    } finally {
+      setLoadingAction(null);
+    }
+  }, [appointment.seriesId, appointment.startTime, clearCache, onClose]);
+
   return (
     <div className="space-y-4">
       {/* Patient — lien vers la fiche patient */}
@@ -157,10 +216,20 @@ function DetailsContent({
         <p className="text-base">{appointment.type}</p>
       </div>
 
-      {/* Statut */}
+      {/* Statut (+ marqueur de série, story 8.4) */}
       <div>
         <span className="text-sm font-medium text-muted-foreground">Statut</span>
-        <p className="text-base">{AppointmentStatusLabels[appointment.status]}</p>
+        <p className="flex items-center gap-2 text-base">
+          {AppointmentStatusLabels[appointment.status]}
+          {appointment.seriesId && (
+            <span
+              className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+              title="Ce rendez-vous fait partie d'une série récurrente"
+            >
+              Série
+            </span>
+          )}
+        </p>
       </div>
 
       {/* Notes optionnelles */}
@@ -227,6 +296,39 @@ function DetailsContent({
           Supprimer
         </LoadingButton>
       </div>
+
+      {/* Actions de série (story 8.4) — n'apparaissent que pour un RDV récurrent.
+          Elles s'ajoutent aux actions unitaires ci-dessus (« cet épisode »). */}
+      {appointment.seriesId && (
+        <div className="space-y-2 pt-2 border-t">
+          <span className="text-sm font-medium text-muted-foreground">
+            Série récurrente
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {appointment.status !== "CANCELLED" && (
+              <LoadingButton
+                size="sm"
+                variant="outline"
+                isLoading={loadingAction === "AnnulerSérie"}
+                disabled={!!loadingAction && loadingAction !== "AnnulerSérie"}
+                onClick={handleCancelSeries}
+              >
+                Annuler toute la série à venir
+              </LoadingButton>
+            )}
+            <LoadingButton
+              size="sm"
+              variant="destructive"
+              className="bg-rose-500 hover:bg-rose-600"
+              isLoading={loadingAction === "SupprimerSérie"}
+              disabled={!!loadingAction && loadingAction !== "SupprimerSérie"}
+              onClick={handleDeleteSeries}
+            >
+              Supprimer toute la série à venir
+            </LoadingButton>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

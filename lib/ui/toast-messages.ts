@@ -17,6 +17,11 @@ export const TOAST_MESSAGES = {
     cancelled: "Rendez-vous annulé.",
     deleted: "Rendez-vous supprimé.",
     statusUpdated: "Statut du rendez-vous mis à jour.",
+    // Story 8.4 — séries de rendez-vous récurrents. Le détail chiffré
+    // (« 4 créés, 2 ignorés ») est composé côté composant à partir du résumé.
+    seriesCreated: "Série de rendez-vous créée.",
+    seriesCancelled: "Série annulée.",
+    seriesDeleted: "Série supprimée.",
   },
   booking: {
     confirmed: "Rendez-vous confirmé !",

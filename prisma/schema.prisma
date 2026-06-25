@@ -211,6 +211,10 @@ model Appointment {
   type      String
   /// FK optionnelle vers le type de soin (story 7.3). Null pour les RDV legacy.
   serviceTypeId String?      @map("service_type_id")
+  /// Identifiant de série groupant les occurrences d'un RDV récurrent (story 8.4).
+  /// UUID opaque ; null = RDV non récurrent (y compris tout l'historique). Permet
+  /// d'annuler/supprimer « toute la série à venir » par simple filtrage.
+  seriesId          String?   @map("series_id")
   /// Notes sur le rendez-vous (optionnel)
   notes             String?
   /// Token UUID d'annulation (généré pour les RDV via tunnel public, null pour les RDV dashboard)
@@ -239,6 +243,8 @@ model Appointment {
   @@index([startTime])
   /// Index sur serviceTypeId pour le comptage des RDV rattachés (suppression protégée 7.3)
   @@index([serviceTypeId])
+  /// Index sur seriesId pour grouper/filtrer les occurrences d'une série (story 8.4)
+  @@index([seriesId])
   @@map("appointments")
 }
 

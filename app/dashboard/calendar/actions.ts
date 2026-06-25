@@ -22,7 +22,13 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/server/auth";
 import { UnauthorizedError, BadRequestError } from "@/lib/errors";
 import { assertValidUuid } from "@/lib/validations/uuid";
-import { appointmentSchema, type AppointmentFormValues } from "@/lib/validations/appointment";
+import {
+  appointmentSchema,
+  recurrenceSchema,
+  type AppointmentFormValues,
+  type RecurrenceFormValues,
+} from "@/lib/validations/appointment";
+import { buildRecurrenceDates } from "@/components/calendar/recurrence-utils";
 import type { AppointmentWithPatient } from "@/types";
 import type { AppointmentStatus } from "@/types";
 import { sendCancellationEmail } from "@/lib/email/send-cancellation";
@@ -46,6 +52,7 @@ function toAppointmentWithPatient(a: {
   type: string;
   serviceTypeId?: string | null;
   serviceType?: { color: string } | null;
+  seriesId?: string | null;
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -60,6 +67,7 @@ function toAppointmentWithPatient(a: {
     type: a.type,
     serviceTypeId: a.serviceTypeId ?? null,
     serviceColor: a.serviceType?.color ?? null,
+    seriesId: a.seriesId ?? null,
     notes: a.notes ?? undefined,
     createdAt: a.createdAt,
     updatedAt: a.updatedAt,
@@ -137,14 +145,18 @@ export async function getAppointmentsByDateRange(
  * @param excludeId - ID d'un RDV à exclure (ex: en cas de modification)
  * @returns { hasConflict, conflictingAppointment? } pour afficher un message d'erreur explicite
  */
-export async function checkConflict(
+/**
+ * Requête brute de conflit (sans `requireUser`) — partagée par `checkConflict`
+ * (qui authentifie) et les boucles internes déjà authentifiées en amont
+ * (ex. `createRecurringAppointments`, story 8.4). Évite de ré-authentifier N
+ * fois sur une même action serveur.
+ */
+async function findConflict(
   startTime: Date,
   endTime: Date,
-  excludeId?: string
-): Promise<{ hasConflict: boolean; conflictingAppointment?: AppointmentWithPatient }> {
-  await requireUser();
-
-  const conflict = await prisma.appointment.findFirst({
+  excludeId?: string,
+) {
+  return prisma.appointment.findFirst({
     where: {
       ...(excludeId ? { id: { not: excludeId } } : {}),
       status: { not: "CANCELLED" },
@@ -157,6 +169,16 @@ export async function checkConflict(
       },
     },
   });
+}
+
+export async function checkConflict(
+  startTime: Date,
+  endTime: Date,
+  excludeId?: string
+): Promise<{ hasConflict: boolean; conflictingAppointment?: AppointmentWithPatient }> {
+  await requireUser();
+
+  const conflict = await findConflict(startTime, endTime, excludeId);
 
   if (!conflict) {
     return { hasConflict: false };
@@ -168,10 +190,52 @@ export async function checkConflict(
   };
 }
 
+/**
+ * Résout le « snapshot » de type de soin partagé par les créations unitaire et
+ * récurrente (story 8.4, DRY de la logique 7.3/SEC-002).
+ *
+ * Si `serviceTypeId` est fourni, le `ServiceType` fait autorité : on en tire le
+ * libellé-instantané (`type`) et la durée réelle. Un service introuvable ou
+ * archivé (`active=false`) est refusé (durcissement dashboard SEC-002). Sans
+ * service (RDV legacy / aucun service configuré), on conserve le comportement 3.3
+ * (`fallbackType` + `fallbackDuration`).
+ */
+async function resolveServiceSnapshot(
+  serviceTypeId: string | undefined,
+  fallbackType: string | undefined,
+  fallbackDuration: number,
+): Promise<
+  | { ok: true; snapshotType: string; durationMin: number }
+  | { ok: false; error: string }
+> {
+  let snapshotType = fallbackType ?? "Consultation";
+  let durationMin = fallbackDuration;
+  if (serviceTypeId) {
+    const service = await prisma.serviceType.findUnique({
+      where: { id: serviceTypeId },
+      select: { label: true, durationMin: true, active: true },
+    });
+    if (!service) {
+      return { ok: false, error: "Type de soin introuvable." };
+    }
+    // Story 7.3 (SEC-002) : un service archivé ne doit pas être rattaché à un
+    // nouveau RDV, même par un acteur de confiance via un client obsolète.
+    if (!service.active) {
+      return {
+        ok: false,
+        error: "Ce type de soin est archivé et n'est plus disponible.",
+      };
+    }
+    snapshotType = service.label;
+    durationMin = service.durationMin;
+  }
+  return { ok: true, snapshotType, durationMin };
+}
+
 /** Résultat de la création d'un rendez-vous */
 export type CreateAppointmentResult =
   | { success: true; appointment: AppointmentWithPatient }
-  | { success: false; error: string };
+  | { success: false; error: string; slotTaken?: boolean };
 
 /**
  * Crée un nouveau rendez-vous.
@@ -198,28 +262,13 @@ export async function createAppointment(
     const { patientId, startTime, duration, serviceTypeId, type, notes } =
       parsed.data;
 
-    // Story 7.3 : si un type de soin est sélectionné, il fait autorité — on en
-    // tire le libellé-instantané (`type`) et la durée réelle (`endTime`). Sinon
-    // (RDV legacy / aucun service configuré) on conserve le comportement 3.3.
-    let snapshotType = type ?? "Consultation";
-    let durationMin = duration;
-    if (serviceTypeId) {
-      const service = await prisma.serviceType.findUnique({
-        where: { id: serviceTypeId },
-        select: { label: true, durationMin: true, active: true },
-      });
-      if (!service) {
-        return { success: false, error: "Type de soin introuvable." };
-      }
-      // Story 7.3 (SEC-002) : défense en profondeur dashboard — un service
-      // archivé (active=false) ne doit pas être rattaché à un nouveau RDV,
-      // même par un acteur de confiance via un client obsolète.
-      if (!service.active) {
-        return { success: false, error: "Ce type de soin est archivé et n'est plus disponible." };
-      }
-      snapshotType = service.label;
-      durationMin = service.durationMin;
+    // Story 7.3/8.4 : résolution du snapshot de service (factorisée, partagée
+    // avec la création récurrente). Refuse un service introuvable/archivé.
+    const resolved = await resolveServiceSnapshot(serviceTypeId, type, duration);
+    if (!resolved.ok) {
+      return { success: false, error: resolved.error };
     }
+    const { snapshotType, durationMin } = resolved;
     const endTime = addMinutes(startTime, durationMin);
 
     const { hasConflict, conflictingAppointment } = await checkConflict(
@@ -231,6 +280,7 @@ export async function createAppointment(
       return {
         success: false,
         error: `Ce créneau est déjà occupé (${name}). Choisissez un autre horaire.`,
+        slotTaken: true,
       };
     }
 
@@ -270,7 +320,7 @@ export async function createAppointment(
 /** Résultat de la mise à jour d'un rendez-vous */
 export type UpdateAppointmentResult =
   | { success: true; appointment: AppointmentWithPatient }
-  | { success: false; error: string };
+  | { success: false; error: string; slotTaken?: boolean };
 
 /**
  * Met à jour un rendez-vous (champs partiels).
@@ -343,6 +393,7 @@ export async function updateAppointment(
         return {
           success: false,
           error: `Ce créneau est déjà occupé (${name}). Choisissez un autre horaire.`,
+          slotTaken: true,
         };
       }
     }
@@ -447,6 +498,221 @@ export async function updateAppointmentStatus(
     return {
       success: false,
       error: "Impossible de modifier le statut. Réessayez plus tard.",
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Story 8.4 : Rendez-vous récurrents (création de série + gestion de série)
+// ---------------------------------------------------------------------------
+
+/**
+ * Résumé structuré de la création d'une série récurrente (story 8.4).
+ *
+ * `created`/`skipped` permettent au composant de composer le détail chiffré
+ * (« 4 créés, 2 ignorés ») ; `skippedDates` liste les créneaux en conflit
+ * ignorés (série non cassée). En cas d'échec total (0 créé) ou d'erreur,
+ * `success: false` (aucun `seriesId` orphelin laissé en base).
+ */
+export type CreateRecurringResult =
+  | {
+      success: true;
+      seriesId: string;
+      created: number;
+      skipped: number;
+      skippedDates: Date[];
+    }
+  | { success: false; error: string; slotTaken?: boolean };
+
+/**
+ * Crée une série de rendez-vous récurrents (même patient, même créneau, même
+ * type de soin) selon une fréquence et un nombre d'occurrences.
+ *
+ * 1. Valide `data` (`appointmentSchema`) et `recurrence` (`recurrenceSchema`).
+ * 2. Résout le snapshot de service (factorisé avec `createAppointment`).
+ * 3. Génère un `seriesId` UUID puis, pour chaque date d'occurrence, vérifie
+ *    l'anti-collision (`findConflict`, l'auth ayant déjà été faite en tête) :
+ *    occurrence libre → retenue ; occupée → ignorée (la série n'est pas cassée).
+ * 4. **Insertion atomique** des occurrences retenues via `createMany` : soit
+ *    toutes persistent, soit aucune (pas de `seriesId` orphelin même si la DB
+ *    échoue en cours d'insertion).
+ * 5. Si **aucune** occurrence libre → `success: false` (rien inséré).
+ * 6. `revalidatePath` une seule fois en fin d'action.
+ */
+export async function createRecurringAppointments(
+  data: AppointmentFormValues,
+  recurrence: RecurrenceFormValues,
+): Promise<CreateRecurringResult> {
+  try {
+    await requireUser();
+
+    const parsedData = appointmentSchema.safeParse(data);
+    if (!parsedData.success) {
+      return { success: false, error: "Données invalides. Vérifiez le formulaire." };
+    }
+    const parsedRecurrence = recurrenceSchema.safeParse(recurrence);
+    if (!parsedRecurrence.success) {
+      return {
+        success: false,
+        error: "Récurrence invalide. Vérifiez la fréquence et le nombre d'occurrences.",
+      };
+    }
+
+    const { patientId, startTime, duration, serviceTypeId, type, notes } =
+      parsedData.data;
+    const { frequency, occurrences } = parsedRecurrence.data;
+
+    // Story 7.3/8.4 : même résolution de service que la création unitaire.
+    const resolved = await resolveServiceSnapshot(serviceTypeId, type, duration);
+    if (!resolved.ok) {
+      return { success: false, error: resolved.error };
+    }
+    const { snapshotType, durationMin } = resolved;
+
+    const seriesId = crypto.randomUUID();
+    const dates = buildRecurrenceDates(startTime, frequency, occurrences);
+
+    // Anti-collision par créneau (N ≤ 26, séquentiel) : on collecte les
+    // occurrences libres et la liste des ignorées (créneau occupé).
+    const toCreate: {
+      patientId: string;
+      startTime: Date;
+      endTime: Date;
+      type: string;
+      notes: string | null;
+      status: "PENDING";
+      seriesId: string;
+      serviceTypeId?: string;
+    }[] = [];
+    const skippedDates: Date[] = [];
+
+    for (const occStart of dates) {
+      const occEnd = addMinutes(occStart, durationMin);
+      const conflict = await findConflict(occStart, occEnd);
+      if (conflict) {
+        skippedDates.push(occStart);
+        continue;
+      }
+      toCreate.push({
+        patientId,
+        startTime: occStart,
+        endTime: occEnd,
+        type: snapshotType,
+        notes: notes ?? null,
+        status: "PENDING",
+        seriesId,
+        // N'ajoute la FK que si un service est sélectionné (RDV legacy = absent).
+        ...(serviceTypeId ? { serviceTypeId } : {}),
+      });
+    }
+
+    if (toCreate.length === 0) {
+      // Tous les créneaux étaient occupés : rien à insérer, donc aucun
+      // `seriesId` orphelin n'est laissé en base.
+      return {
+        success: false,
+        error:
+          "Aucun rendez-vous n'a pu être créé : tous les créneaux de la série sont déjà occupés.",
+        slotTaken: true,
+      };
+    }
+
+    // Insertion atomique : `createMany` est une seule instruction SQL — soit
+    // toutes les occurrences libres persistent, soit aucune (garantie « pas de
+    // seriesId orphelin » même en cas d'échec DB).
+    await prisma.appointment.createMany({ data: toCreate });
+
+    revalidatePath(CALENDAR_PATH);
+    return {
+      success: true,
+      seriesId,
+      created: toCreate.length,
+      skipped: skippedDates.length,
+      skippedDates,
+    };
+  } catch (e) {
+    if (e instanceof UnauthorizedError) throw e;
+    console.error("[createRecurringAppointments] Error:", e);
+    return {
+      success: false,
+      error: "Impossible de créer la série de rendez-vous. Réessayez plus tard.",
+    };
+  }
+}
+
+/**
+ * Annule (statut `CANCELLED`) toute la série **à venir** à partir d'un RDV donné.
+ *
+ * Opère **uniquement** sur `seriesId = X AND startTime >= fromStartTime` et ne
+ * touche pas les occurrences déjà `CANCELLED`/`COMPLETED` (les passés/terminés
+ * sont préservés). Ne cible jamais une autre série.
+ */
+export async function cancelAppointmentSeries(
+  seriesId: string,
+  fromStartTime: Date,
+): Promise<{ success: boolean; affected: number; error?: string }> {
+  try {
+    await requireUser();
+    assertValidUuid(seriesId);
+
+    const result = await prisma.appointment.updateMany({
+      where: {
+        seriesId,
+        startTime: { gte: fromStartTime },
+        status: { notIn: ["CANCELLED", "COMPLETED"] },
+      },
+      data: { status: "CANCELLED" },
+    });
+
+    revalidatePath(CALENDAR_PATH);
+    return { success: true, affected: result.count };
+  } catch (e) {
+    if (e instanceof UnauthorizedError) throw e;
+    if (e instanceof BadRequestError) {
+      return { success: false, affected: 0, error: "Identifiant de série invalide." };
+    }
+    console.error("[cancelAppointmentSeries] Error:", e);
+    return {
+      success: false,
+      affected: 0,
+      error: "Impossible d'annuler la série. Réessayez plus tard.",
+    };
+  }
+}
+
+/**
+ * Supprime (hard delete) toute la série **à venir** à partir d'un RDV donné.
+ *
+ * Opère **uniquement** sur `seriesId = X AND startTime >= fromStartTime`. Ne
+ * cible jamais une autre série ni les occurrences passées.
+ */
+export async function deleteAppointmentSeries(
+  seriesId: string,
+  fromStartTime: Date,
+): Promise<{ success: boolean; affected: number; error?: string }> {
+  try {
+    await requireUser();
+    assertValidUuid(seriesId);
+
+    const result = await prisma.appointment.deleteMany({
+      where: {
+        seriesId,
+        startTime: { gte: fromStartTime },
+      },
+    });
+
+    revalidatePath(CALENDAR_PATH);
+    return { success: true, affected: result.count };
+  } catch (e) {
+    if (e instanceof UnauthorizedError) throw e;
+    if (e instanceof BadRequestError) {
+      return { success: false, affected: 0, error: "Identifiant de série invalide." };
+    }
+    console.error("[deleteAppointmentSeries] Error:", e);
+    return {
+      success: false,
+      affected: 0,
+      error: "Impossible de supprimer la série. Réessayez plus tard.",
     };
   }
 }
