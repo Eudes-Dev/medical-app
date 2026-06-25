@@ -55,6 +55,7 @@ export const TOAST_MESSAGES = {
   // pour ce créneau ») sont composés côté composant (pas de clé par valeur).
   waitlist: {
     added: "Patient ajouté à la liste d'attente.",
+    updated: "Entrée de la liste d'attente modifiée.",
     removed: "Patient retiré de la liste d'attente.",
     scheduled: "Rendez-vous programmé depuis la liste d'attente.",
   },
