@@ -31,11 +31,13 @@ beforeAll(() => {
 
 // --- Mocks ------------------------------------------------------------------
 const addToWaitlistMock = vi.fn();
+const updateWaitlistEntryMock = vi.fn();
 const removeFromWaitlistMock = vi.fn();
 const markWaitlistScheduledMock = vi.fn();
 
 vi.mock("@/app/dashboard/waitlist/actions", () => ({
   addToWaitlist: (...a: unknown[]) => addToWaitlistMock(...a),
+  updateWaitlistEntry: (...a: unknown[]) => updateWaitlistEntryMock(...a),
   removeFromWaitlist: (...a: unknown[]) => removeFromWaitlistMock(...a),
   markWaitlistScheduled: (...a: unknown[]) => markWaitlistScheduledMock(...a),
 }));
@@ -185,6 +187,32 @@ describe("WaitlistView (Story 8.5)", () => {
     );
   });
 
+  it("édition : « Modifier » ouvre la modale pré-remplie (patient figé)", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <WaitlistView
+        entries={[
+          entry({
+            id: "to-edit",
+            priority: "HIGH",
+            reason: "Suivi rapproché",
+          }),
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Modifier/i }));
+
+    // Titre d'édition + patient en lecture seule (pas de bouton de sélection).
+    expect(screen.getByText("Modifier l'entrée")).toBeInTheDocument();
+    expect(screen.queryByTestId("select-patient")).not.toBeInTheDocument();
+    // Le patient figé apparaît dans la modale (en plus de la ligne de la liste).
+    expect(screen.getAllByText("Jean Martin").length).toBeGreaterThanOrEqual(2);
+    // Motif pré-rempli.
+    expect(screen.getByDisplayValue("Suivi rapproché")).toBeInTheDocument();
+  });
+
   it("conversion : ouvre la modal pré-remplie et marque l'entrée SCHEDULED au succès", async () => {
     const user = userEvent.setup();
     markWaitlistScheduledMock.mockResolvedValue({ success: true });
@@ -245,5 +273,34 @@ describe("AddToWaitlistModal (Story 8.5)", () => {
       patientId: "11111111-1111-4111-8111-111111111111",
       priority: "NORMAL",
     });
+  });
+
+  it("mode édition : la soumission route vers updateWaitlistEntry(id, …)", async () => {
+    const user = userEvent.setup();
+    updateWaitlistEntryMock.mockResolvedValue({ success: true, entry: entry() });
+    const onOpenChange = vi.fn();
+
+    render(
+      <AddToWaitlistModal
+        open
+        entry={entry({
+          id: "edit-7",
+          priority: "HIGH",
+          // patientId valide (UUID) : le schéma le valide même si le champ est figé.
+          patientId: "11111111-1111-4111-8111-111111111111",
+        })}
+        onOpenChange={onOpenChange}
+        onSuccess={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Enregistrer/i }));
+
+    await waitFor(() => expect(updateWaitlistEntryMock).toHaveBeenCalledTimes(1));
+    expect(updateWaitlistEntryMock.mock.calls[0][0]).toBe("edit-7");
+    expect(updateWaitlistEntryMock.mock.calls[0][1]).toMatchObject({
+      priority: "HIGH",
+    });
+    expect(addToWaitlistMock).not.toHaveBeenCalled();
   });
 });

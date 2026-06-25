@@ -1,7 +1,7 @@
 schema: 1
 story: "4.2"
 story_title: "Flux de Réservation Invité"
-gate: CONCERNS
+gate: PASS
 status_reason: >-
   Implémentation complète et propre des 10 ACs, 26/26 tests verts, sécurité du cookie
   solide et aucune fuite PII. Le gate reste CONCERNS car deux carry-overs de 4.1
@@ -122,3 +122,10 @@ recommendations:
       refs: ["tests/e2e/"]
     - action: "Confirmer PO : faut-il dédoublonner Patient sur (email + nom) ou statu quo ?"
       refs: ["app/(public)/[cabinet-slug]/book/actions.ts:111-129"]
+
+# === Re-revue BMAD sweep 2026-06-25 : gate CONCERNS -> PASS ===
+bmad_sweep_rereview:
+  date: "2026-06-25"
+  previous_gate: CONCERNS
+  verdict: PASS
+  reason: "REL-001/SEC-001 resolus par 5.3 (zonedDayBoundsUtc + checkRateLimit sur createGuestBooking). CONC-001 (race) accepte MVP single-praticien (durcissement = backlog). Residus <= low."

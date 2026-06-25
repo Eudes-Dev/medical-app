@@ -11,7 +11,10 @@
 
 import { describe, expect, it } from "vitest";
 
-import { waitlistEntrySchema } from "@/lib/validations/waitlist";
+import {
+  waitlistEntrySchema,
+  waitlistEntryUpdateSchema,
+} from "@/lib/validations/waitlist";
 import {
   compareWaitlistEntries,
   sortWaitlistEntries,
@@ -104,6 +107,35 @@ describe("waitlistEntrySchema (Story 8.5)", () => {
       priority: "HIGH",
     });
     expect(parsed.success).toBe(true);
+  });
+});
+
+describe("waitlistEntryUpdateSchema (Story 8.5, AC 8)", () => {
+  it("n'exige pas de patientId (édition) et applique la priorité par défaut", () => {
+    const parsed = waitlistEntryUpdateSchema.safeParse({});
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.priority).toBe("NORMAL");
+      expect(parsed.data).not.toHaveProperty("patientId");
+    }
+  });
+
+  it("applique les mêmes bornes que la création (motif > 200 rejeté)", () => {
+    const parsed = waitlistEntryUpdateSchema.safeParse({ reason: "x".repeat(201) });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("rejette une fenêtre incohérente (preferredTo < preferredFrom)", () => {
+    const parsed = waitlistEntryUpdateSchema.safeParse({
+      preferredFrom: new Date(Date.UTC(2026, 6, 10)),
+      preferredTo: new Date(Date.UTC(2026, 6, 5)),
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((i) => i.path.includes("preferredTo"))).toBe(
+        true,
+      );
+    }
   });
 });
 

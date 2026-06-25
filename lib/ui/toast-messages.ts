@@ -51,10 +51,17 @@ export const TOAST_MESSAGES = {
     hasAppointments:
       "Ce type de soin est utilisé par des rendez-vous : archivez-le plutôt que de le supprimer.",
   },
+  // Story 9.1 — notes de consultation (historique clinique du dossier patient).
+  consultationNote: {
+    created: "Note de consultation ajoutée.",
+    updated: "Note de consultation modifiée.",
+    deleted: "Note de consultation supprimée.",
+  },
   // Story 8.5 — liste d'attente. Les comptes dynamiques (« 2 patients en attente
   // pour ce créneau ») sont composés côté composant (pas de clé par valeur).
   waitlist: {
     added: "Patient ajouté à la liste d'attente.",
+    updated: "Entrée de la liste d'attente modifiée.",
     removed: "Patient retiré de la liste d'attente.",
     scheduled: "Rendez-vous programmé depuis la liste d'attente.",
   },

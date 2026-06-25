@@ -1,7 +1,7 @@
 schema: 1
 story: "7.2"
 story_title: "Congés et jours fériés"
-gate: CONCERNS
+gate: PASS
 status_reason: >-
   Implémentation conforme aux 10 ACs, 85/85 tests verts (46 unitaires + 39 intégration, dont 5
   nouveaux sur le tunnel public), tsc et eslint propres sur tous les fichiers 7.2. Aucun défaut
@@ -138,3 +138,10 @@ recommendations:
       refs: ["tests/e2e/"]
     - action: "Composant test (RTL) du TimeOffForm : flux préview → confirmation → création"
       refs: ["components/settings/timeoff-form.tsx"]
+
+# === Re-revue BMAD sweep 2026-06-25 : gate CONCERNS -> PASS ===
+bmad_sweep_rereview:
+  date: "2026-06-25"
+  previous_gate: CONCERNS
+  verdict: PASS
+  reason: "REL-001/SEC-001 resolus par 5.3. REL-002 (findMany hors transaction) low mitige (AC6 teste) ; MAINT-001 low. Residus <= low MVP-acceptes."

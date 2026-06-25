@@ -18,7 +18,7 @@ import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { CalendarPlus, Clock, Plus, Trash2 } from "lucide-react";
+import { CalendarPlus, Clock, Pencil, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +52,8 @@ export interface WaitlistViewProps {
 export function WaitlistView({ entries }: WaitlistViewProps) {
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(false);
+  /** Entrée en cours d'édition → ouvre `AddToWaitlistModal` en mode édition. */
+  const [editing, setEditing] = useState<WaitlistEntryWithPatient | null>(null);
   /** Entrée en cours de conversion → pré-remplit `CreateAppointmentModal`. */
   const [converting, setConverting] = useState<WaitlistEntryWithPatient | null>(
     null,
@@ -203,6 +205,14 @@ export function WaitlistView({ entries }: WaitlistViewProps) {
                 <Button
                   size="sm"
                   variant="outline"
+                  onClick={() => setEditing(entry)}
+                >
+                  <Pencil className="h-4 w-4" />
+                  Modifier
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   disabled={removingId === entry.id}
                   onClick={() => handleRemove(entry)}
                 >
@@ -221,6 +231,18 @@ export function WaitlistView({ entries }: WaitlistViewProps) {
         onOpenChange={setAddOpen}
         onSuccess={() => router.refresh()}
       />
+
+      {/* Modale d'édition : même formulaire en mode édition (patient figé).
+          La clé force un remount par entrée pour réinitialiser le pré-remplissage. */}
+      {editing && (
+        <AddToWaitlistModal
+          key={editing.id}
+          open={!!editing}
+          entry={editing}
+          onOpenChange={(open) => !open && setEditing(null)}
+          onSuccess={() => router.refresh()}
+        />
+      )}
 
       {/* Modale de conversion : création de RDV pré-remplie (patient + soin).
           La clé force un remount par entrée pour réinitialiser le pré-remplissage. */}

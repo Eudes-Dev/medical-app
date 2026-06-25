@@ -16,6 +16,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   addToWaitlist,
+  updateWaitlistEntry,
   getWaitlist,
   removeFromWaitlist,
   markWaitlistScheduled,
@@ -32,6 +33,7 @@ vi.mock("@/lib/prisma", () => ({
     waitlistEntry: {
       create: vi.fn(),
       findMany: vi.fn(),
+      findUnique: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
     },
@@ -144,6 +146,75 @@ describe("Story 8.5 — addToWaitlist", () => {
       addToWaitlist({ patientId: PATIENT_UUID, priority: "NORMAL" }),
     ).rejects.toThrow(UnauthorizedError);
     expect(prisma.waitlistEntry.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("Story 8.5 — updateWaitlistEntry", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupAuthMock(true);
+  });
+
+  it("édite une entrée WAITING (gardé sur status, remplacement complet)", async () => {
+    vi.mocked(prisma.waitlistEntry.updateMany).mockResolvedValue({ count: 1 } as any);
+    vi.mocked(prisma.waitlistEntry.findUnique).mockResolvedValue(
+      entryRow({ priority: "URGENT", reason: "Aggravation" }) as any,
+    );
+
+    const result = await updateWaitlistEntry(ENTRY_UUID, {
+      priority: "URGENT",
+      reason: "Aggravation",
+    });
+
+    expect(result.success).toBe(true);
+    const call = vi.mocked(prisma.waitlistEntry.updateMany).mock.calls[0][0]!;
+    expect(call.where).toMatchObject({ id: ENTRY_UUID, status: "WAITING" });
+    // Remplacement complet : champs absents remis à null.
+    expect(call.data).toMatchObject({
+      priority: "URGENT",
+      reason: "Aggravation",
+      notes: null,
+      preferredFrom: null,
+      preferredTo: null,
+      serviceTypeId: null,
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/dashboard/waitlist");
+  });
+
+  it("renvoie success:false si l'entrée n'est plus WAITING (count 0)", async () => {
+    vi.mocked(prisma.waitlistEntry.updateMany).mockResolvedValue({ count: 0 } as any);
+
+    const result = await updateWaitlistEntry(ENTRY_UUID, { priority: "HIGH" });
+
+    expect(result.success).toBe(false);
+    expect(prisma.waitlistEntry.findUnique).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("refuse un type de soin archivé (SEC-002), sans toucher la base", async () => {
+    vi.mocked(prisma.serviceType.findUnique).mockResolvedValue({ active: false } as any);
+
+    const result = await updateWaitlistEntry(ENTRY_UUID, {
+      priority: "NORMAL",
+      serviceTypeId: SERVICE_UUID,
+    });
+
+    expect(result.success).toBe(false);
+    expect(prisma.waitlistEntry.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("refuse un id non-UUID (BadRequest)", async () => {
+    const result = await updateWaitlistEntry("nope", { priority: "NORMAL" });
+    expect(result.success).toBe(false);
+    expect(prisma.waitlistEntry.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("lève UnauthorizedError si non authentifié", async () => {
+    setupAuthMock(false);
+    await expect(
+      updateWaitlistEntry(ENTRY_UUID, { priority: "NORMAL" }),
+    ).rejects.toThrow(UnauthorizedError);
+    expect(prisma.waitlistEntry.updateMany).not.toHaveBeenCalled();
   });
 });
 

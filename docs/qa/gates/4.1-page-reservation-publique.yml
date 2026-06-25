@@ -1,7 +1,7 @@
 schema: 1
 story: "4.1"
 story_title: "Page de Réservation Publique"
-gate: CONCERNS
+gate: PASS
 status_reason: >-
   Implémentation conforme aux 9 ACs avec 21 tests verts, mais deux NFR non couverts
   bloquent la mise en production : rate limiter absent sur Server Action publique
@@ -70,3 +70,10 @@ recommendations:
       refs: ["tests/e2e/"]
     - action: "Mutualiser les messages d'erreur public dans un module i18n quand 4.2/4.3 livrées"
       refs: ["app/(public)/[cabinet-slug]/book/actions.ts"]
+
+# === Re-revue BMAD sweep 2026-06-25 : gate CONCERNS -> PASS ===
+bmad_sweep_rereview:
+  date: "2026-06-25"
+  previous_gate: CONCERNS
+  verdict: PASS
+  reason: "REL-001 resolu (slots.ts -> slotInstant Europe/Paris, 5.3) ; SEC-001 resolu (book/actions.ts -> checkRateLimit/getClientIp sur getAvailableSlots, 5.3). Aucun concern ouvert."

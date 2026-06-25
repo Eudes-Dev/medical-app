@@ -25,9 +25,12 @@ import { UnauthorizedError, BadRequestError } from "@/lib/errors";
 import { assertValidUuid } from "@/lib/validations/uuid";
 import {
   waitlistEntrySchema,
+  waitlistEntryUpdateSchema,
   type WaitlistEntryFormValues,
+  type WaitlistEntryUpdateValues,
 } from "@/lib/validations/waitlist";
 import { sortWaitlistEntries } from "@/lib/waitlist/waitlist-utils";
+import { zonedDayKey } from "@/lib/cabinet/timezone";
 import type { WaitlistEntryWithPatient, WaitlistPriority } from "@/types";
 
 /** Chemin de la page liste d'attente à revalider après mutation. */
@@ -184,6 +187,92 @@ export async function addToWaitlist(
 }
 
 /**
+ * Édite une entrée `WAITING` (story 8.5, AC 8) : priorité, motif, notes, soin
+ * visé et fenêtre de dates. Sémantique de **remplacement complet** (le formulaire
+ * renvoie l'état entier) : un champ absent est remis à `null`, exactement comme
+ * `addToWaitlist`.
+ *
+ * 1. Valide `data` (`waitlistEntryUpdateSchema`).
+ * 2. Si un soin est visé, vérifie qu'il existe **et n'est pas archivé** (garde
+ *    SEC-002, identique à `addToWaitlist`).
+ * 3. `updateMany` gardé sur `status: WAITING` (une entrée convertie/annulée n'est
+ *    plus éditable) — le `where` composé (id + status) n'est pas unique.
+ * 4. Relit l'entrée à jour pour renvoyer le DTO complet et revalide la page.
+ */
+export async function updateWaitlistEntry(
+  id: string,
+  data: WaitlistEntryUpdateValues,
+): Promise<WaitlistActionResult> {
+  try {
+    await requireUser();
+    assertValidUuid(id);
+
+    const parsed = waitlistEntryUpdateSchema.safeParse(data);
+    if (!parsed.success) {
+      return { success: false, error: "Données invalides. Vérifiez le formulaire." };
+    }
+    const { serviceTypeId, priority, reason, notes, preferredFrom, preferredTo } =
+      parsed.data;
+
+    if (serviceTypeId) {
+      const service = await prisma.serviceType.findUnique({
+        where: { id: serviceTypeId },
+        select: { active: true },
+      });
+      if (!service) {
+        return { success: false, error: "Type de soin introuvable." };
+      }
+      // Story 7.3 (SEC-002) : un service archivé ne peut pas être visé.
+      if (!service.active) {
+        return {
+          success: false,
+          error: "Ce type de soin est archivé et n'est plus disponible.",
+        };
+      }
+    }
+
+    // Garde de statut : seule une entrée `WAITING` est éditable. `updateMany` car
+    // le `where` composé (id + status) n'est pas un sélecteur unique. Remplacement
+    // complet : `serviceTypeId` absent → `null` (« n'importe quel soin »).
+    const { count } = await prisma.waitlistEntry.updateMany({
+      where: { id, status: "WAITING" },
+      data: {
+        priority,
+        reason: reason ?? null,
+        notes: notes ?? null,
+        preferredFrom: preferredFrom ?? null,
+        preferredTo: preferredTo ?? null,
+        serviceTypeId: serviceTypeId ?? null,
+      },
+    });
+    if (count === 0) {
+      return { success: false, error: "Cette entrée n'est plus dans la file d'attente." };
+    }
+
+    const updated = await prisma.waitlistEntry.findUnique({
+      where: { id },
+      include: WAITLIST_INCLUDE,
+    });
+    if (!updated) {
+      return { success: false, error: "Cette entrée n'est plus dans la file d'attente." };
+    }
+
+    revalidatePath(WAITLIST_PATH);
+    return { success: true, entry: toWaitlistEntryWithPatient(updated) };
+  } catch (e) {
+    if (e instanceof UnauthorizedError) throw e;
+    if (e instanceof BadRequestError) {
+      return { success: false, error: "Identifiant invalide." };
+    }
+    console.error("[updateWaitlistEntry] Error:", e);
+    return {
+      success: false,
+      error: "Impossible de mettre à jour l'entrée. Réessayez plus tard.",
+    };
+  }
+}
+
+/**
  * Retourne la file active (`status = WAITING`), patient + soin inclus, triée par
  * priorité décroissante puis FIFO (tri en mémoire, cf. `waitlist-utils`).
  */
@@ -276,28 +365,14 @@ export async function markWaitlistScheduled(
 }
 
 /**
- * Clé calendaire `yyyy-mm-dd` en heure **locale** d'une Date (slot du dashboard).
- * Convention TZ locale (REL-001) — on n'importe aucun helper Paris ici (réservés
- * au tunnel public, cf. story 8.5 §Fuseau horaire). L'harmonisation TZ dashboard
- * ↔ tunnel est une story transverse distincte.
+ * Clé calendaire entière (`AAAAMMJJ`) d'une borne `@db.Date` (stockée à minuit
+ * UTC). On lit les composantes **UTC** pour récupérer le jour calendaire pur,
+ * sans décalage de fuseau. Encodage **identique** à {@link zonedDayKey} (`year *
+ * 10000 + (month-1) * 100 + day`, `getUTCMonth()` valant déjà `month-1`), pour
+ * que slot (jour de Paris) et bornes soient directement comparables.
  */
-function localDayKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-/**
- * Clé calendaire `yyyy-mm-dd` d'une borne `@db.Date` (stockée à minuit UTC).
- * On lit les composantes **UTC** pour récupérer le jour calendaire pur, sans
- * décalage de fuseau.
- */
-function dateDayKey(d: Date): string {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+function dateDayKey(d: Date): number {
+  return d.getUTCFullYear() * 10000 + d.getUTCMonth() * 100 + d.getUTCDate();
 }
 
 /**
@@ -307,8 +382,9 @@ function dateDayKey(d: Date): string {
  * - **type de soin** : une entrée sans `serviceTypeId` matche tout ; une entrée
  *   ciblée ne matche que si le créneau porte le **même** soin.
  * - **fenêtre de dates** : une entrée sans fenêtre matche toujours ; sinon le
- *   jour calendaire **local** du créneau doit être dans `[preferredFrom,
- *   preferredTo]` inclus.
+ *   jour calendaire du créneau — calculé dans le fuseau du cabinet
+ *   (`Europe/Paris`) via {@link zonedDayKey}, indépendamment du fuseau serveur
+ *   (REL-001) — doit être dans `[preferredFrom, preferredTo]` inclus.
  * - **durée** : une entrée ciblant un soin n'est suggérée que si le créneau
  *   libéré est **au moins aussi long** que la durée nominale de ce soin. Une
  *   entrée sans soin (« n'importe quel soin ») a une durée inconnue → conservée
@@ -330,7 +406,7 @@ export async function getMatchingWaitlistEntries(slot: {
     include: WAITLIST_INCLUDE,
   });
 
-  const slotDayKey = localDayKey(slot.startTime);
+  const slotDayKey = zonedDayKey(slot.startTime);
 
   const matching = rows.filter((row) => {
     // Type de soin : entrée ciblée → doit viser le même soin que le créneau.

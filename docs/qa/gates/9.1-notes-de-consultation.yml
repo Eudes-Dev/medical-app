@@ -1,0 +1,78 @@
+# Quality Gate — Story 9.1 : Notes de consultation
+# Généré par Quinn (Test Architect) via *review.
+schema: 1
+story: "9.1"
+story_title: "Notes de consultation (historique clinique structuré du dossier patient)"
+gate: PASS
+status_reason: >-
+  8/8 AC couverts. Modèle ConsultationNote + migration non destructive, 4 Server Actions
+  sécurisées (requireUser + assertValidUuid + Zod), UI fiche patient (ajout/édition/
+  suppression + indication RDV rattaché). Suite complète verte (70 fichiers / 648 tests,
+  +18 vs baseline, aucune régression). Build OK. Reste l'application de la migration en
+  base = étape de déploiement standard (hors périmètre code).
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-25T13:40:00Z"
+
+waiver:
+  active: false
+
+quality_score: 100
+
+top_issues: []
+
+# Réserve relevée à la 1re passe de revue — corrigée pendant la revue (refactor mineur autorisé).
+resolved_issues:
+  - id: AC4-UI-911
+    was: medium
+    resolution: >-
+      AC4 exigeait « l'indication du RDV rattaché » : le composant ignorait `appointmentId`.
+      Ajout d'un badge « Rendez-vous rattaché » (icône CalendarClock) affiché quand
+      `note.appointmentId` est présent. Lint + build re-vérifiés verts.
+
+evidence:
+  tests_reviewed: 18
+  tests_status: "18/18 verts sur le périmètre 9.1 (unit 6, integration 12)"
+  full_baseline: "70 fichiers / 648 tests verts (baseline 68/630 + 2 fichiers / 18 tests 9.1)"
+  risk_summary: >-
+    Risque global faible : feature additive single-tenant, orthogonale au cœur agenda ;
+    `Patient.notes` (champ administratif) laissé intact ; migration non destructive.
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+    notes: >-
+      AC8 (cascade patient / SetNull RDV) validé au niveau FK schéma+migration (non
+      unit-testable sans base, cohérent avec l'approche 8.5).
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >-
+      `requireUser()` en tête des 4 actions (testé : non-auth → UnauthorizedError / échec sans
+      appel Prisma). `assertValidUuid()` sur patientId/noteId avant tout Prisma (testé).
+      Validation Zod isomorphe (content trimé/borné ≤ 5000, appointmentId UUID). Prisma paramétré.
+  performance:
+    status: PASS
+    notes: >-
+      Index `consultation_notes(patient_id)` et `(appointment_id)`. Tri `createdAt desc` en base.
+      Volumétrie par patient faible en single-tenant : pas de pagination requise.
+  reliability:
+    status: PASS
+    notes: >-
+      Gestion d'erreurs homogène (Unauthorized/BadRequest mappés FR, pas de fuite d'id),
+      revalidatePath ciblé sur la fiche patient, état UI optimiste resynchronisé via router.refresh.
+  maintainability:
+    status: PASS
+    notes: >-
+      Conventions du dépôt respectées (forme de retour des actions calquée sur patients/actions,
+      harnais de test calqué sur patients/actions.test, JSDoc soignée). Distinction claire
+      ConsultationNote (historique) vs Patient.notes (administratif).
+
+recommendations:
+  immediate:
+    - action: "Appliquer la migration en base (Supabase) au déploiement — étape standard (OPS), non exécutée par la boucle."
+      refs: ["prisma/migrations/20260625000011_add_consultation_notes/migration.sql"]
+  future:
+    - action: "Épopée 9 : permettre de rattacher une note à un RDV depuis l'UI (le modèle + l'affichage du badge sont déjà en place ; ne manque que le sélecteur de RDV)."
+      refs: ["components/patients/consultation-notes.tsx", "app/dashboard/patients/consultation-note-actions.ts"]
+    - action: "Couverture E2E (Playwright) du parcours notes une fois l'infra E2E disponible (cf. stories 3.6/5.2)."
+      refs: ["tests/e2e/"]

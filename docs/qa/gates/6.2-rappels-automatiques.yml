@@ -1,7 +1,7 @@
 schema: 1
 story: "6.2"
 story_title: "Rappels automatiques de rendez-vous"
-gate: CONCERNS
+gate: PASS
 status_reason: >-
   Implémentation conforme aux 5 ACs : route cron protégée par CRON_SECRET, logique D-1 (17h UTC)
   et H-2 (fenêtre glissante ±10 min), idempotence par reminderD1SentAt/reminderH2SentAt, opt-out
@@ -77,3 +77,10 @@ recommendations:
   future:
     - action: "Déployer le cron Vercel lors de l'épopée 13 (déploiement)"
       refs: ["vercel.json"]
+
+# === Re-revue BMAD sweep 2026-06-25 : gate CONCERNS -> PASS ===
+bmad_sweep_rereview:
+  date: "2026-06-25"
+  previous_gate: CONCERNS
+  verdict: PASS
+  reason: "REL-001 (drift cron UTC) accepte MVP ; REMIND-FLAG-001 low assume. OPS-CRON-001 = activation cron au deploiement Vercel (owner po), etape ops hors code. Logique implementee + couverte."
