@@ -1,0 +1,174 @@
+# CI — Solution Médicale (story 13.1)
+#
+# Débloque l'exécution automatisée des suites de tests, en particulier les
+# suites E2E Playwright des stories 3.6 / 5.2 (jamais exécutées faute de runner).
+#
+# Deux jobs :
+#   - `test` : portes dures sans base de données (Vitest mocke Prisma/Supabase) +
+#     build de production. Lint/type-check sont informatifs (dette baseline connue).
+#   - `e2e`  : suites Playwright contre un Postgres jetable + un projet Supabase de
+#     test. Opt-in via la variable de dépôt `E2E_ENABLED=true` (Settings →
+#     Variables) car il requiert des secrets Supabase de test.
+#
+# Secrets de dépôt requis pour le job `e2e` (Settings → Secrets → Actions) :
+#   SUPABASE_URL_TEST              -> NEXT_PUBLIC_SUPABASE_URL_TEST
+#   SUPABASE_ANON_KEY_TEST         -> NEXT_PUBLIC_SUPABASE_ANON_KEY_TEST
+#   SUPABASE_SERVICE_ROLE_KEY_TEST -> SUPABASE_SERVICE_ROLE_KEY_TEST
+# (cf. .env.test.example)
+#
+# NB : ce workflow N'exécute PAS `prisma migrate deploy` en production (OPS-002,
+# action de déploiement laissée à l'ops). Le job e2e utilise `migrate reset` sur
+# une base jetable via `npm run test:e2e:db:reset`.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  test:
+    name: Tests unitaires/intégration + build
+    runs-on: ubuntu-latest
+
+    # Postgres jetable : Vitest mocke Prisma (n'en a pas besoin), mais `next build`
+    # prérend des pages qui interrogent Prisma (ex. /unsubscribe, dashboard) et
+    # exige donc une base RÉELLE joignable — comme le build Vercel en prod. Base
+    # éphémère du runner, jamais une base prod (garde-fou anti-prod côté scripts).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: medical_app_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/medical_app_ci
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/medical_app_ci
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL_TEST || 'https://dummy.supabase.co' }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_TEST || 'dummy-anon-key' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      # Portes informatives : dette baseline connue (apostrophes JSX, `as any`
+      # des mocks de test, narrowing de filtres Prisma). Ne bloquent pas la CI.
+      - name: Lint (informatif)
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Type-check (informatif)
+        run: npx tsc --noEmit
+        continue-on-error: true
+
+      # Porte dure : la suite Vitest doit rester verte (non-régression).
+      # Indépendante de la base (Prisma/Supabase mockés).
+      - name: Vitest (unit + integration + component)
+        run: npm run test:run
+
+      # Applique le schéma sur la base jetable pour que le build puisse prérendre
+      # les pages qui lisent en base (base vide = findFirst/findMany -> [] / null,
+      # géré par les pages). N'exécute JAMAIS contre une base prod.
+      - name: Apply migrations (base CI jetable)
+        run: npx prisma migrate deploy
+
+      # Porte dure : le build de production doit passer.
+      - name: Build
+        run: npm run build
+
+  e2e:
+    name: E2E Playwright (opt-in)
+    runs-on: ubuntu-latest
+    needs: test
+    # Opt-in : définir la variable de dépôt E2E_ENABLED=true une fois les secrets
+    # Supabase de test configurés. Évite des échecs sur les forks/PR sans secrets.
+    if: ${{ vars.E2E_ENABLED == 'true' }}
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: medical_app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Base jetable du service ci-dessus (jamais une base prod : garde-fou
+      # anti-prod dans reset-e2e-db.ts / global-setup.ts).
+      DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/medical_app_test
+      DIRECT_URL_TEST: postgresql://postgres:postgres@localhost:5432/medical_app_test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/medical_app_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/medical_app_test
+      # Auth Supabase de test (depuis les secrets de dépôt).
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL_TEST }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_TEST }}
+      NEXT_PUBLIC_SUPABASE_URL_TEST: ${{ secrets.SUPABASE_URL_TEST }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY_TEST: ${{ secrets.SUPABASE_ANON_KEY_TEST }}
+      SUPABASE_SERVICE_ROLE_KEY_TEST: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_TEST }}
+      E2E_PRACTITIONER_EMAIL: practitioner-e2e@test.local
+      E2E_PRACTITIONER_PASSWORD: E2ePass!2026
+      E2E_PRACTITIONER_NAME: Dr. E2E Tester
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # global-setup.ts : reset+seed de la base jetable, puis login praticien
+      # (storageState). Le webServer (`npm run dev`) est démarré par Playwright.
+      - name: Run E2E suites
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
