@@ -1,3 +1,10 @@
+// Fuseau fixé à UTC pour des tests déterministes quel que soit le runner
+// (CI vs local). Le matching de la liste d'attente (story 8.5) compare le jour
+// calendaire **local** du créneau aux bornes `@db.Date` lues en UTC : sans TZ
+// fixe, le test de fenêtre dépendrait du fuseau de la machine (cf. REL-853).
+// Doit être posé avant toute lecture de `Date`.
+process.env.TZ = "UTC";
+
 import "@testing-library/jest-dom";
 import { vi } from "vitest";
 import React from "react";

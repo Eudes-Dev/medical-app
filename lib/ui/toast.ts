@@ -12,6 +12,8 @@ import { toast } from "@/components/ui/sonner";
 
 type ToastOptions = {
   description?: string;
+  /** Action optionnelle (bouton dans le toast), ex. lien vers la liste d'attente (story 8.5). */
+  action?: { label: string; onClick: () => void };
 };
 
 export function showSuccess(message: string, options?: ToastOptions) {

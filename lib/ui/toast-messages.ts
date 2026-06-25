@@ -51,6 +51,13 @@ export const TOAST_MESSAGES = {
     hasAppointments:
       "Ce type de soin est utilisé par des rendez-vous : archivez-le plutôt que de le supprimer.",
   },
+  // Story 8.5 — liste d'attente. Les comptes dynamiques (« 2 patients en attente
+  // pour ce créneau ») sont composés côté composant (pas de clé par valeur).
+  waitlist: {
+    added: "Patient ajouté à la liste d'attente.",
+    removed: "Patient retiré de la liste d'attente.",
+    scheduled: "Rendez-vous programmé depuis la liste d'attente.",
+  },
   errors: {
     validation: "Vérifiez les informations saisies.",
     slotTaken: "Ce créneau vient d'être réservé. Merci d'en choisir un autre.",

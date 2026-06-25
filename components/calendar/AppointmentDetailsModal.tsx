@@ -13,14 +13,16 @@
 import * as React from "react";
 import { useCallback, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
-import { showError, showSuccess } from "@/lib/ui/toast";
+import { showError, showInfo, showSuccess } from "@/lib/ui/toast";
 import { TOAST_MESSAGES } from "@/lib/ui/toast-messages";
 import { CreateAppointmentModal } from "@/components/calendar/CreateAppointmentModal";
+import { getMatchingWaitlistEntries } from "@/app/dashboard/waitlist/actions";
 import {
   Dialog,
   DialogContent,
@@ -74,10 +76,41 @@ function DetailsContent({
   onEditRequested?: () => void;
 }) {
   const clearCache = useCalendarStore((s) => s.clearCache);
+  const router = useRouter();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
   const patientName = `${appointment.patient.firstName} ${appointment.patient.lastName}`.trim() || "Patient";
   const durationMinutes = getDurationMinutes(appointment.startTime, appointment.endTime);
+
+  /**
+   * Story 8.5 — rappel « créneau libéré » : après une annulation/suppression,
+   * cherche les patients en attente **compatibles** avec ce créneau et affiche un
+   * rappel non bloquant (toast + lien vers la liste d'attente) s'il y en a.
+   * Best-effort : un échec du matching n'impacte jamais l'annulation (catch).
+   */
+  const notifyWaitlistMatches = useCallback(async () => {
+    try {
+      const matches = await getMatchingWaitlistEntries({
+        startTime: appointment.startTime,
+        serviceTypeId: appointment.serviceTypeId ?? undefined,
+        durationMin: durationMinutes,
+      });
+      if (matches.length > 0) {
+        showInfo(
+          `${matches.length} patient${matches.length > 1 ? "s" : ""} en attente pour ce créneau`,
+          {
+            description: "Un créneau vient de se libérer.",
+            action: {
+              label: "Voir la liste d'attente",
+              onClick: () => router.push("/dashboard/waitlist"),
+            },
+          },
+        );
+      }
+    } catch (e) {
+      console.error("[waitlist:match] échec du matching:", e);
+    }
+  }, [appointment.startTime, appointment.serviceTypeId, durationMinutes, router]);
 
   const handleStatusChange = useCallback(
     async (status: AppointmentStatus, label: string) => {
@@ -91,6 +124,8 @@ function DetailsContent({
               : TOAST_MESSAGES.appointment.statusUpdated,
           );
           clearCache();
+          // Story 8.5 : un créneau annulé peut intéresser des patients en attente.
+          if (status === "CANCELLED") void notifyWaitlistMatches();
           onUpdated();
         } else {
           showError(TOAST_MESSAGES.errors.server);
@@ -99,7 +134,7 @@ function DetailsContent({
         setLoadingAction(null);
       }
     },
-    [appointment.id, clearCache, onUpdated]
+    [appointment.id, clearCache, onUpdated, notifyWaitlistMatches]
   );
 
   const handleDelete = useCallback(async () => {
@@ -110,6 +145,8 @@ function DetailsContent({
       if (result.success) {
         showSuccess(TOAST_MESSAGES.appointment.deleted);
         clearCache();
+        // Story 8.5 : créneau supprimé → rappel des patients en attente compatibles.
+        void notifyWaitlistMatches();
         onClose();
       } else {
         showError(TOAST_MESSAGES.errors.server);
@@ -117,7 +154,7 @@ function DetailsContent({
     } finally {
       setLoadingAction(null);
     }
-  }, [appointment.id, clearCache, onClose]);
+  }, [appointment.id, clearCache, onClose, notifyWaitlistMatches]);
 
   const handleCancelAppointment = useCallback(() => {
     if (!confirm("Annuler ce rendez-vous ? Le patient en sera informé.")) return;
@@ -144,6 +181,8 @@ function DetailsContent({
           `${TOAST_MESSAGES.appointment.seriesCancelled} ${result.affected} rendez-vous annulé${result.affected > 1 ? "s" : ""}.`,
         );
         clearCache();
+        // Story 8.5 : ce créneau (1ʳᵉ occurrence libérée) peut intéresser la file.
+        void notifyWaitlistMatches();
         onClose();
       } else {
         showError(TOAST_MESSAGES.errors.server);
@@ -151,7 +190,7 @@ function DetailsContent({
     } finally {
       setLoadingAction(null);
     }
-  }, [appointment.seriesId, appointment.startTime, clearCache, onClose]);
+  }, [appointment.seriesId, appointment.startTime, clearCache, onClose, notifyWaitlistMatches]);
 
   const handleDeleteSeries = useCallback(async () => {
     if (!appointment.seriesId) return;
@@ -172,6 +211,8 @@ function DetailsContent({
           `${TOAST_MESSAGES.appointment.seriesDeleted} ${result.affected} rendez-vous supprimé${result.affected > 1 ? "s" : ""}.`,
         );
         clearCache();
+        // Story 8.5 : créneau de série supprimé → rappel des patients en attente.
+        void notifyWaitlistMatches();
         onClose();
       } else {
         showError(TOAST_MESSAGES.errors.server);
@@ -179,7 +220,7 @@ function DetailsContent({
     } finally {
       setLoadingAction(null);
     }
-  }, [appointment.seriesId, appointment.startTime, clearCache, onClose]);
+  }, [appointment.seriesId, appointment.startTime, clearCache, onClose, notifyWaitlistMatches]);
 
   return (
     <div className="space-y-4">

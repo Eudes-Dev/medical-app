@@ -219,6 +219,72 @@ export interface AppointmentWithPatient extends Appointment {
 }
 
 // ============================================
+// LISTE D'ATTENTE (story 8.5)
+// ============================================
+
+/**
+ * Niveau d'urgence d'une entrée de liste d'attente.
+ * Correspond à l'enum Prisma `WaitlistPriority`.
+ */
+export type WaitlistPriority = "NORMAL" | "HIGH" | "URGENT";
+
+/**
+ * Statut d'une entrée de liste d'attente.
+ * Correspond à l'enum Prisma `WaitlistStatus`.
+ */
+export type WaitlistStatus = "WAITING" | "SCHEDULED" | "CANCELLED";
+
+/** Libellés FR des niveaux d'urgence (affichage badge). */
+export const WaitlistPriorityLabels: Record<WaitlistPriority, string> = {
+  NORMAL: "Normal",
+  HIGH: "Haute",
+  URGENT: "Urgente",
+};
+
+/**
+ * Entrée de liste d'attente projetée pour l'affichage (DTO, story 8.5).
+ *
+ * Expose l'entrée + le patient (champs minimaux) + le type de soin souhaité s'il
+ * existe. Aucune fuite de champ Prisma non nécessaire (le mapper côté action ne
+ * projette que ces champs).
+ */
+export interface WaitlistEntryWithPatient {
+  /** Identifiant unique (UUID) */
+  id: string;
+  /** ID du patient en attente */
+  patientId: string;
+  /** Niveau d'urgence (tri de la file) */
+  priority: WaitlistPriority;
+  /** Statut de l'entrée */
+  status: WaitlistStatus;
+  /** Motif de la demande (optionnel) */
+  reason?: string | null;
+  /** Notes internes (optionnel) */
+  notes?: string | null;
+  /** Début de la fenêtre de dates souhaitée (optionnel, calendaire) */
+  preferredFrom?: Date | null;
+  /** Fin de la fenêtre de dates souhaitée (optionnel, calendaire) */
+  preferredTo?: Date | null;
+  /** Date de création (ancienneté = FIFO à priorité égale) */
+  createdAt: Date;
+  /** Patient associé (champs minimaux pour l'affichage) */
+  patient: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+    email?: string | null;
+  };
+  /** Type de soin souhaité (null = « Tout soin ») */
+  serviceType?: {
+    id: string;
+    label: string;
+    durationMin: number;
+    color: string;
+  } | null;
+}
+
+// ============================================
 // CRÉNEAUX HORAIRES
 // ============================================
 

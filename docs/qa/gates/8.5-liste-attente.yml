@@ -1,0 +1,119 @@
+# Quality Gate — Story 8.5 : Liste d'attente
+# Généré par Quinn (Test Architect) via *review.
+schema: 1
+story: "8.5"
+story_title: "Liste d'attente (file priorisée + proposition d'un créneau libéré)"
+gate: CONCERNS
+status_reason: >-
+  Implémentation fonctionnellement complète et conforme aux 15 AC, 31 tests 8.5 verts,
+  bon respect des conventions (DRY, requireUser, SEC-002, schéma Zod séparé, TZ locale).
+  Deux points opérationnels à traiter avant merge/prod (migration non appliquée+committée,
+  3 fichiers parasites à la racine) et quelques durcissements mineurs.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-25T08:05:00Z"
+
+waiver:
+  active: false
+
+top_issues:
+  - id: OPS-851
+    severity: high
+    finding: >-
+      Migration `20260625000010_add_waitlist_entries` non appliquée à la base (Supabase) et
+      à committer. Le code repose sur `prisma.waitlistEntry` : sans migration appliquée,
+      la feature échoue en runtime. Gate de déploiement (OPS-001).
+    suggested_action: >-
+      Appliquer la migration selon le flux projet, vérifier l'état, committer le dossier de
+      migration avec le reste de la story.
+    ac_refs: ["1", "2"]
+
+  - id: REPO-852
+    severity: high
+    finding: >-
+      3 fichiers vides parasites à la racine du repo (`void`, `preferredFrom`.,+`,
+      `expect(addToWaitlistMock).toHaveBeenCalledTimes(1))`), créés par des commandes shell
+      mal échappées. Pollution du dépôt.
+    suggested_action: "Supprimer ces 3 fichiers avant le commit."
+
+  - id: REL-853
+    severity: medium
+    finding: >-
+      `getMatchingWaitlistEntries` calcule le jour du créneau via `localDayKey` (fuseau du
+      *serveur*, UTC en prod) alors que les bornes `@db.Date` sont lues en UTC. Près de
+      minuit, possible décalage d'un jour entre l'intention « jour local navigateur » et le
+      matching. Best-effort/non bloquant ; discrepance TZ déjà notée (REL-001) mais le test
+      de fenêtre dépend du fuseau du runner.
+    suggested_action: >-
+      Documenter explicitement (ou normaliser slot+bornes sur la même base UTC) et fixer le
+      TZ du runner de test (ex. TZ=UTC) pour éviter une fragilité de fenêtre.
+    ac_refs: ["9"]
+
+  - id: FUNC-854
+    severity: low
+    finding: >-
+      Le matching ignore la durée : un créneau court (15 min) peut suggérer une entrée visant
+      un soin long (60 min). Conforme à l'AC 9 (matching = type + fenêtre seulement) mais
+      limite produit à connaître.
+    suggested_action: "Backlog : envisager un filtre durée (slot.durationMin >= service.durationMin)."
+    ac_refs: ["9"]
+
+  - id: ROBUST-855
+    severity: low
+    finding: >-
+      `removeFromWaitlist`/`markWaitlistScheduled` mettent à jour par id sans garde de statut
+      (`where: { id, status: "WAITING" }`). Non exploitable via l'UI (seules les WAITING sont
+      affichées) mais transition d'état non idempotente côté action.
+    suggested_action: "Ajouter une garde de statut dans le `where` (durcissement défensif)."
+    ac_refs: ["8", "10"]
+
+  - id: DATA-856
+    severity: low
+    finding: >-
+      `reason`/`notes` vides sont stockés en chaîne vide `""` plutôt que `null`
+      (defaultValues `""` + `value ?? null`). Cosmétique ; n'altère pas l'affichage.
+    suggested_action: "Transformer `\"\"` → undefined dans le schéma Zod (`.transform`)."
+    ac_refs: ["6"]
+
+  - id: TEST-857
+    severity: low
+    finding: >-
+      Petits trous de couverture : pas de test BadRequest pour `markWaitlistScheduled`,
+      pas d'assertion explicite « DTO sans fuite » (resolvedAppointmentId/updatedAt absents),
+      pas de test de matching avec entrée bornée OUVERTE (un seul `preferredFrom`).
+    suggested_action: "Compléter ces cas si le temps le permet (non bloquant)."
+    ac_refs: ["15"]
+
+evidence:
+  tests_reviewed: 31
+  tests_status: "31/31 verts (unit 11, integration 15, component 5)"
+  risk_summary: "Risque global faible : feature additive, single-tenant, orthogonale au cœur agenda."
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >-
+      `requireUser` en tête de chaque action (testé), `assertValidUuid` sur les ids,
+      garde SEC-002 (service archivé refusé), DTO projeté sans fuite de champs, textes trimés/bornés.
+  performance:
+    status: PASS
+    notes: >-
+      Tri en mémoire + chargement complet de la file WAITING : acceptable en single-tenant.
+      Index (status, priority) et (patient_id) présents. Pas de pagination (volumétrie faible).
+  reliability:
+    status: CONCERNS
+    notes: >-
+      Rappel « créneau libéré » best-effort avec catch silencieux (bon). Subtilité TZ
+      serveur/navigateur (REL-853). Migration à appliquer (OPS-851).
+  maintainability:
+    status: PASS
+    notes: >-
+      Code lisible, JSDoc soignée, DRY (PatientSelect, createAppointment, helpers purs testables).
+
+recommendations:
+  immediate:
+    - "Appliquer + committer la migration (OPS-851)."
+    - "Supprimer les 3 fichiers parasites racine (REPO-852)."
+  future:
+    - "Clarifier/normaliser le fuseau du matching et fixer TZ du runner (REL-853)."
+    - "Gardes de statut défensives sur les updates (ROBUST-855)."
+    - "Filtre durée du matching + normalisation reason/notes vides (FUNC-854, DATA-856)."

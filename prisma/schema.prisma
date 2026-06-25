@@ -86,6 +86,30 @@ enum TimeOffSource {
   HOLIDAY
 }
 
+/// Niveau d'urgence d'une entrée de liste d'attente (story 8.5).
+///
+/// Sert au tri de la file (URGENT > HIGH > NORMAL). Le tri par sévérité n'étant
+/// pas exprimable directement en SQL sur un enum, il est appliqué en mémoire
+/// côté action (cf. lib/waitlist/waitlist-utils.ts).
+enum WaitlistPriority {
+  /// Demande standard.
+  NORMAL
+  /// Demande prioritaire.
+  HIGH
+  /// Demande urgente (traitée en premier).
+  URGENT
+}
+
+/// Statut d'une entrée de liste d'attente (story 8.5).
+enum WaitlistStatus {
+  /// En attente d'un créneau (seule valeur affichée dans la file active).
+  WAITING
+  /// Convertie en rendez-vous (cf. `resolvedAppointmentId`).
+  SCHEDULED
+  /// Retirée sans rendez-vous (conservée pour un futur historique).
+  CANCELLED
+}
+
 // ==============================================
 // MODÈLES
 // ==============================================
@@ -166,6 +190,9 @@ model Patient {
 
   /// Liste des rendez-vous du patient (relation 1:N)
   appointments Appointment[]
+
+  /// Entrées de liste d'attente du patient (story 8.5 ; onDelete Cascade côté WaitlistEntry).
+  waitlistEntries WaitlistEntry[]
 
   @@map("patients")
 }
@@ -274,6 +301,9 @@ model ServiceType {
 
   /// RDV rattachés (relation inverse ; onDelete SetNull côté Appointment).
   appointments Appointment[]
+
+  /// Entrées de liste d'attente visant ce soin (story 8.5 ; onDelete SetNull côté WaitlistEntry).
+  waitlistEntries WaitlistEntry[]
 
   @@index([active, isPublic])
   @@map("service_types")
@@ -412,4 +442,59 @@ model CabinetProfile {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("cabinet_profile")
+}
+
+/// Entrée de liste d'attente (story 8.5).
+///
+/// Persiste une demande de rendez-vous non satisfaite (agenda complet) pour un
+/// patient déjà au fichier. La file est priorisée (`priority`) et peut viser un
+/// soin précis (`serviceTypeId`) et/ou une fenêtre de dates souhaitée
+/// (`preferredFrom`/`preferredTo`). Quand un créneau se libère, on retrouve les
+/// entrées compatibles (matching in-app) et on convertit l'une d'elles en RDV via
+/// `createAppointment` (statut → `SCHEDULED`, `resolvedAppointmentId` renseigné).
+///
+/// Single-tenant : pas de `userId`/`tenantId`. Modèle volontairement léger
+/// (`resolvedAppointmentId` opaque, pas de FK) — compatible avec un futur
+/// historique des conversions et une proposition automatique par email/lien,
+/// non implémentés ici.
+model WaitlistEntry {
+  /// Identifiant unique UUID généré automatiquement
+  id            String   @id @default(uuid())
+  /// ID du patient en attente (clé étrangère). onDelete Cascade : un patient
+  /// supprimé purge ses entrées (cohérent avec `Appointment`).
+  patientId     String   @map("patient_id")
+  /// FK optionnelle vers le type de soin souhaité. Null = « n'importe quel soin ».
+  /// onDelete SetNull : détache sans casser si le soin est supprimé.
+  serviceTypeId String?  @map("service_type_id")
+  /// Niveau d'urgence (tri de la file).
+  priority      WaitlistPriority @default(NORMAL)
+  /// Motif de la demande (≤ 200 car., optionnel).
+  reason        String?
+  /// Notes internes (≤ 500 car., optionnel).
+  notes         String?
+  /// Statut de l'entrée (file active = `WAITING`).
+  status        WaitlistStatus   @default(WAITING)
+  /// Début de la fenêtre de dates souhaitée (inclus, optionnel). Type `Date`
+  /// (calendaire, pas de composante horaire) — même choix que `TimeOff` (7.2).
+  preferredFrom DateTime? @db.Date @map("preferred_from")
+  /// Fin de la fenêtre de dates souhaitée (inclus, optionnel). `>= preferredFrom`.
+  preferredTo   DateTime? @db.Date @map("preferred_to")
+  /// RDV créé lors de la conversion (story 8.5). Traçabilité opaque : pas de
+  /// relation/contrainte FK (modèle léger assumé). Null tant qu'aucune conversion.
+  resolvedAppointmentId String? @map("resolved_appointment_id")
+  /// Date de création (ancienneté = FIFO à priorité égale)
+  createdAt     DateTime @default(now()) @map("created_at")
+  /// Date de dernière modification
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  /// Patient en attente (onDelete Cascade).
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  /// Type de soin souhaité (onDelete SetNull ; null = tout soin).
+  serviceType ServiceType? @relation(fields: [serviceTypeId], references: [id], onDelete: SetNull)
+
+  /// Index sur (statut, priorité) pour filtrer la file active + amorcer le tri.
+  @@index([status, priority])
+  /// Index sur patientId pour les requêtes par patient.
+  @@index([patientId])
+  @@map("waitlist_entries")
 }

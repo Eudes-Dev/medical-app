@@ -80,8 +80,19 @@ export interface CreateAppointmentModalProps {
   defaultStartTime?: Date;
   /** En mode édition : RDV existant à modifier */
   appointment?: AppointmentWithPatient | null;
-  /** Appelé après création / modification réussie */
-  onSuccess?: () => void;
+  /**
+   * Pré-remplissage en mode **création** (story 8.5, conversion liste d'attente).
+   * Présélectionne le patient et, si fourni, le type de soin (et sa durée). Sans
+   * effet en mode édition (`appointment` fourni).
+   */
+  initialPatientId?: string;
+  initialServiceTypeId?: string;
+  /**
+   * Appelé après création / modification réussie. En création, reçoit le RDV créé
+   * (story 8.5) pour permettre l'orchestration post-création (ex. marquer une
+   * entrée de liste d'attente comme programmée).
+   */
+  onSuccess?: (appointment?: AppointmentWithPatient) => void;
 }
 
 /**
@@ -197,10 +208,16 @@ export function CreateAppointmentModal({
   onOpenChange,
   defaultStartTime,
   appointment: editAppointment,
+  initialPatientId,
+  initialServiceTypeId,
   onSuccess,
 }: CreateAppointmentModalProps) {
   const clearCache = useCalendarStore((s) => s.clearCache);
   const isEdit = Boolean(editAppointment);
+
+  // Story 8.5 : garde-fou pour n'appliquer la durée du soin pré-rempli qu'une
+  // seule fois par ouverture (évite d'écraser une durée éditée manuellement).
+  const prefillDurationApplied = React.useRef(false);
 
   /** Catalogue des services actifs (story 7.3), chargé à l'ouverture. */
   const [services, setServices] = useState<ServiceTypeDTO[]>([]);
@@ -239,7 +256,7 @@ export function CreateAppointmentModal({
   } = useForm<AppointmentFormValues>({
     resolver: zodResolver(appointmentSchema),
     defaultValues: {
-      patientId: editAppointment?.patientId ?? "",
+      patientId: editAppointment?.patientId ?? initialPatientId ?? "",
       startTime: editAppointment?.startTime ?? defaultStartTime ?? new Date(),
       duration: initialDuration,
       notes: editAppointment?.notes ?? "",
@@ -306,25 +323,40 @@ export function CreateAppointmentModal({
       setSelectedServiceId(editAppointment.serviceTypeId ?? "");
     } else {
       reset({
-        patientId: "",
+        patientId: initialPatientId ?? "",
         startTime: defaultStartTime ?? new Date(),
         duration: RECOMMENDED_DURATION,
         notes: "",
       });
-      setSelectedServiceId("");
+      // Story 8.5 : pré-sélection du soin visé par l'entrée de liste d'attente
+      // (sa durée est appliquée par l'effet de présélection ci-dessous).
+      setSelectedServiceId(initialServiceTypeId ?? "");
     }
     // Récurrence remise à zéro à chaque (ré)ouverture (story 8.4).
     setRecurring(false);
     setFrequency("weekly");
     setOccurrences(DEFAULT_OCCURRENCES);
-  }, [open, defaultStartTime, editAppointment, initialDuration, reset]);
+    // Réarme l'application de la durée pré-remplie pour cette ouverture (8.5).
+    prefillDurationApplied.current = false;
+  }, [open, defaultStartTime, editAppointment, initialDuration, initialPatientId, initialServiceTypeId, reset]);
 
   // En création, présélectionne le premier service actif et pré-remplit la durée.
   useEffect(() => {
     if (!open || editAppointment) return;
-    if (selectedServiceId === "" && services.length > 0) {
+    if (services.length === 0) return;
+    if (selectedServiceId === "") {
       setSelectedServiceId(services[0].id);
       setValue("duration", services[0].durationMin as AppointmentFormValues["duration"]);
+      return;
+    }
+    // Story 8.5 : si un soin a été pré-rempli (conversion liste d'attente), aligne
+    // la durée sur ce soin une seule fois (sans écraser une édition manuelle).
+    if (!prefillDurationApplied.current) {
+      const svc = services.find((s) => s.id === selectedServiceId);
+      if (svc) {
+        setValue("duration", svc.durationMin as AppointmentFormValues["duration"]);
+      }
+      prefillDurationApplied.current = true;
     }
   }, [open, editAppointment, services, selectedServiceId, setValue]);
 
@@ -400,7 +432,9 @@ export function CreateAppointmentModal({
         );
         clearCache();
         onOpenChange(false);
-        onSuccess?.();
+        // Story 8.5 : transmet le RDV créé/modifié pour l'orchestration post-succès
+        // (conversion d'une entrée de liste d'attente en RDV).
+        onSuccess?.(result.appointment);
       } else {
         showError(
           result.slotTaken
