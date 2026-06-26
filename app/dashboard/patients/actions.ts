@@ -61,6 +61,11 @@ export type PatientAppointment = {
   endTime: Date;
   status: string;
   type: string;
+  /// Détails optionnels affichés dans le panneau dépliable (story 9.4).
+  motif: string | null;
+  modalite: string | null;
+  lieu: string | null;
+  note: string | null;
 };
 
 /**
@@ -259,6 +264,10 @@ export async function updatePatient(
           endTime: appointment.endTime,
           status: appointment.status,
           type: appointment.type,
+          motif: appointment.motif ?? null,
+          modalite: appointment.modalite ?? null,
+          lieu: appointment.lieu ?? null,
+          note: appointment.notes ?? null,
         })),
       },
     };
@@ -321,6 +330,10 @@ export async function getPatientById(
         endTime: appointment.endTime,
         status: appointment.status,
         type: appointment.type,
+        motif: appointment.motif ?? null,
+        modalite: appointment.modalite ?? null,
+        lieu: appointment.lieu ?? null,
+        note: appointment.notes ?? null,
       })),
     };
   } catch (error) {

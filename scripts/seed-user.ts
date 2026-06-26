@@ -10,8 +10,9 @@
 import { createClient } from "@supabase/supabase-js";
 import * as dotenv from "dotenv";
 
-// Charger les variables d'environnement
+// Charger les variables d'environnement (.env.local prioritaire, sinon .env)
 dotenv.config({ path: ".env.local" });
+dotenv.config({ path: ".env" });
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -33,10 +34,10 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   },
 });
 
-// Utilisateur de test
+// Utilisateur de test (surchargeable via .env : SEED_USER_EMAIL / SEED_USER_PASSWORD)
 const TEST_USER = {
-  email: "djeya.j@gmail.com",
-  password: "Test123!",
+  email: process.env.SEED_USER_EMAIL ?? "djeya.j@gmail.com",
+  password: process.env.SEED_USER_PASSWORD ?? "Test123!",
   name: "Dr. Eudes",
 };
 

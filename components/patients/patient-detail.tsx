@@ -13,28 +13,14 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import {
-  CalendarClock,
-  CheckCircle2,
-  Download,
-  Edit3,
-  Eye,
-  FileText,
-  Mail,
-  MapPin,
-  Phone,
-  Trash2,
-  UploadCloud,
-} from "lucide-react";
+import { Edit3, Mail, MapPin, Phone, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { PatientForm } from "@/components/patients/patient-form";
-import type {
-  PatientDetail,
-  PatientAppointment,
-} from "@/app/dashboard/patients/actions";
+import { AppointmentHistory } from "@/components/patients/appointment-history";
+import type { PatientDetail } from "@/app/dashboard/patients/actions";
 import { updatePatient, deletePatient } from "@/app/dashboard/patients/actions";
 import { showError, showSuccess } from "@/lib/ui/toast";
 import { TOAST_MESSAGES } from "@/lib/ui/toast-messages";
@@ -48,46 +34,6 @@ export type PatientDetailClientProps = {
   patient: PatientDetail;
 };
 
-type MedicalDocument = {
-  id: string;
-  name: string;
-  size: string;
-  uploadedAt: string;
-  type: "pdf" | "image";
-};
-
-const MOCK_PRACTITIONER_NAME = "Dr. Jean Dupont";
-
-const MOCK_MEDICAL_DOCUMENTS: MedicalDocument[] = [
-  {
-    id: "1",
-    name: "Blood_Test_Results.pdf",
-    size: "2,4 Mo",
-    uploadedAt: "Ajouté le 05/03/2026",
-    type: "pdf",
-  },
-  {
-    id: "2",
-    name: "X-Ray_Report.png",
-    size: "1,5 Mo",
-    uploadedAt: "Ajouté le 21/02/2026",
-    type: "image",
-  },
-];
-
-/**
- * Formate une date en chaîne lisible en français.
- */
-function formatDate(date: Date) {
-  return new Date(date).toLocaleString("fr-FR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 /**
  * Formate une date sans l'heure (pour les métadonnées de profil).
  */
@@ -97,24 +43,6 @@ function formatDateShort(date: Date) {
     month: "short",
     day: "2-digit",
   });
-}
-
-/**
- * Calcule un label lisible pour le statut d'un rendez-vous.
- */
-function getAppointmentStatusLabel(status: string) {
-  switch (status) {
-    case "PENDING":
-      return "En attente";
-    case "CONFIRMED":
-      return "Confirmé";
-    case "CANCELLED":
-      return "Annulé";
-    case "COMPLETED":
-      return "Terminé";
-    default:
-      return status;
-  }
 }
 
 /**
@@ -210,8 +138,6 @@ export function PatientDetailClient({ patient }: PatientDetailClientProps) {
       setIsSubmitting(false);
     }
   }, [currentPatient.id, router]);
-
-  const hasAppointments = currentPatient.appointments.length > 0;
 
   const initials = `${currentPatient.firstName.charAt(
     0,
@@ -341,166 +267,9 @@ export function PatientDetailClient({ patient }: PatientDetailClientProps) {
         </Card>
       </section>
 
-      {/* Historique des rendez-vous */}
+      {/* Historique des rendez-vous (handoff Claude Design — story 9.4) */}
       <section>
-        <Card className="border border-slate-200/80 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <CalendarClock className="h-5 w-5 text-sky-600" />
-              <CardTitle className="text-base font-semibold">
-                Historique des rendez-vous
-              </CardTitle>
-            </div>
-            <Button size="sm" variant="outline">
-              Nouveau rendez-vous
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {hasAppointments ? (
-              <div className="overflow-hidden rounded-xl border border-slate-200">
-                <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)] items-center border-b bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-500">
-                  <span>Date & heure</span>
-                  <span>Type de consultation</span>
-                  <span>Statut</span>
-                  <span>Praticien</span>
-                  <span className="text-right">Actions</span>
-                </div>
-                <div className="divide-y">
-                  {currentPatient.appointments.map(
-                    (appointment: PatientAppointment) => (
-                      <div
-                        key={appointment.id}
-                        className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)] items-center px-4 py-3 text-sm"
-                      >
-                        <div className="space-y-0.5">
-                          <p className="font-medium">
-                            {formatDate(appointment.startTime)}
-                          </p>
-                        </div>
-                        <div className="text-sm text-slate-700">
-                          {appointment.type}
-                        </div>
-                        <div>
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            {getAppointmentStatusLabel(appointment.status)}
-                          </span>
-                        </div>
-                        <div className="text-sm text-slate-700">
-                          {MOCK_PRACTITIONER_NAME}
-                        </div>
-                        <div className="text-right">
-                          <Button
-                            asChild
-                            variant="link"
-                            size="sm"
-                            className="h-auto px-0 text-xs font-semibold text-sky-600"
-                          >
-                            <a
-                              href={`/dashboard/appointments/${appointment.id}`}
-                            >
-                              Voir les détails
-                            </a>
-                          </Button>
-                        </div>
-                      </div>
-                    ),
-                  )}
-                </div>
-                <div className="border-t bg-slate-50 px-4 py-2 text-center text-xs font-medium text-sky-600">
-                  Charger plus d&apos;historique
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Aucun rendez-vous enregistré pour ce patient.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* Documents médicaux */}
-      <section>
-        <Card className="border border-slate-200/80 shadow-sm">
-          <CardHeader className="space-y-1">
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-sky-600" />
-              <CardTitle className="text-base font-semibold">
-                Documents médicaux
-              </CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Zone de drop */}
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 px-6 py-10 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-sky-50 text-sky-600">
-                <UploadCloud className="h-6 w-6" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-slate-800">
-                  Glissez-déposez vos fichiers ici
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  ou{" "}
-                  <button
-                    type="button"
-                    className="font-semibold text-sky-600 underline-offset-2 hover:underline"
-                  >
-                    cliquez pour les sélectionner
-                  </button>{" "}
-                  depuis votre ordinateur.
-                </p>
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                Formats supportés : PDF, PNG, JPG. Taille maximale 10 Mo.
-              </p>
-            </div>
-
-            {/* Liste des documents récents */}
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase text-slate-500">
-                Récemment ajoutés
-              </p>
-              <div className="divide-y rounded-xl border border-slate-200 bg-white">
-                {MOCK_MEDICAL_DOCUMENTS.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="flex items-center justify-between gap-4 px-4 py-3 text-sm"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
-                        <FileText className="h-4 w-4" />
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="font-medium">{doc.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {doc.size} • {doc.uploadedAt}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-500">
-                      <button
-                        type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-slate-100"
-                        aria-label="Prévisualiser le document"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-slate-100"
-                        aria-label="Télécharger le document"
-                      >
-                        <Download className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <AppointmentHistory appointments={currentPatient.appointments} />
       </section>
     </div>
   );

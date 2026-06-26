@@ -70,6 +70,40 @@ const APPOINTMENT_TYPES = [
 
 type Status = "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
 
+/** Motifs plausibles pour alimenter le panneau dépliable de l'historique RDV. */
+const APPOINTMENT_MOTIFS = [
+  "Contrôle de la tension",
+  "Suivi de traitement",
+  "Bilan annuel complet",
+  "Douleurs lombaires",
+  "Renouvellement d'ordonnance",
+  "Conseil nutritionnel",
+  "Forte fièvre persistante",
+  "Contrôle de cicatrisation",
+];
+
+const CABINET_ADDRESSES = [
+  "Cabinet · 12 rue de la Santé",
+  "Cabinet · 5 av. des Lilas",
+];
+
+/**
+ * Détails optionnels (motif / modalité / lieu) cohérents avec le type de RDV,
+ * pour rendre le panneau dépliable réaliste (story 9.4).
+ */
+function appointmentDetails(type: string): {
+  motif: string;
+  modalite: string;
+  lieu: string;
+} {
+  const isVideo = /téléconsult/i.test(type);
+  return {
+    motif: randomChoice(APPOINTMENT_MOTIFS),
+    modalite: isVideo ? "Vidéo" : "Sur place",
+    lieu: isVideo ? "Lien visio envoyé par e-mail" : randomChoice(CABINET_ADDRESSES),
+  };
+}
+
 function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -198,6 +232,8 @@ async function seedPatientsAndAppointments() {
       const durationMinutes = randomChoice([15, 30, 45, 60]);
       const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
       const status = generateAppointmentStatus(start);
+      const type = randomChoice(APPOINTMENT_TYPES);
+      const details = appointmentDetails(type);
 
       await prisma.appointment.create({
         data: {
@@ -205,7 +241,10 @@ async function seedPatientsAndAppointments() {
           startTime: start,
           endTime: end,
           status,
-          type: randomChoice(APPOINTMENT_TYPES),
+          type,
+          motif: details.motif,
+          modalite: details.modalite,
+          lieu: details.lieu,
           notes: randomBool(0.3) ? "RDV historique (seed)." : null,
         },
       });
@@ -223,6 +262,8 @@ async function seedPatientsAndAppointments() {
         const durationMinutes = randomChoice([15, 30, 45, 60]);
         const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
         const status = generateAppointmentStatus(start);
+        const type = randomChoice(APPOINTMENT_TYPES);
+        const details = appointmentDetails(type);
 
         await prisma.appointment.create({
           data: {
@@ -230,7 +271,10 @@ async function seedPatientsAndAppointments() {
             startTime: start,
             endTime: end,
             status,
-            type: randomChoice(APPOINTMENT_TYPES),
+            type,
+            motif: details.motif,
+            modalite: details.modalite,
+            lieu: details.lieu,
             notes: randomBool(0.4) ? "RDV (fenêtre dense)." : null,
           },
         });

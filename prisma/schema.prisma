@@ -283,8 +283,15 @@ model Appointment {
   /// UUID opaque ; null = RDV non récurrent (y compris tout l'historique). Permet
   /// d'annuler/supprimer « toute la série à venir » par simple filtrage.
   seriesId          String?   @map("series_id")
-  /// Notes sur le rendez-vous (optionnel)
+  /// Notes sur le rendez-vous (optionnel). Réutilisé comme « Note » clinique
+  /// affichée dans le panneau dépliable de l'historique RDV (story 9.4).
   notes             String?
+  /// Motif du rendez-vous (optionnel) — affiché dans le détail de l'historique (story 9.4).
+  motif             String?
+  /// Modalité du rendez-vous (optionnel, ex. « Sur place », « Vidéo ») — story 9.4.
+  modalite          String?
+  /// Lieu du rendez-vous (optionnel, ex. « Cabinet · 12 rue de la Santé ») — story 9.4.
+  lieu              String?
   /// Token UUID d'annulation (généré pour les RDV via tunnel public, null pour les RDV dashboard)
   cancellationToken String?   @unique @map("cancellation_token")
   /// Horodatage du rappel J-1 envoyé (null = pas encore envoyé) (story 6.2)
