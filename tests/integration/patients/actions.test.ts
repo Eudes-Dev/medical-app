@@ -3,6 +3,7 @@
  *
  * Story 2.1: getPatients (2.1-INT-004 à 2.1-INT-013)
  * Story 2.2: createPatient, updatePatient, getPatientById, deletePatient (2.2-INT-001 à 2.2-INT-011)
+ * Story 9.4: mapping des champs détaillés de RDV (motif/modalite/lieu/note) (9.4-INT-001 à 9.4-INT-002)
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -586,5 +587,106 @@ describe("deletePatient (Story 2.2)", () => {
 
     expect(revalidatePath).toHaveBeenCalledWith("/dashboard/patients");
     expect(revalidatePath).toHaveBeenCalledWith("/dashboard/patients/11111111-1111-4111-8111-111111111111");
+  });
+});
+
+// --- Story 9.4: historique RDV — mapping des champs détaillés (motif/modalite/lieu/note) ---
+
+describe("Story 9.4: mapping des champs détaillés de RDV", () => {
+  const patientId = "11111111-1111-4111-8111-111111111111";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupAuthMock(true);
+  });
+
+  it("9.4-INT-001: getPatientById expose motif/modalite/lieu et note (← notes), null si absent", async () => {
+    const baseAppt = {
+      id: "apt-detail",
+      startTime: new Date("2026-06-01T09:00:00Z"),
+      endTime: new Date("2026-06-01T09:30:00Z"),
+      status: "COMPLETED",
+      type: "Consultation",
+    };
+    vi.mocked(prisma.patient.findUnique).mockResolvedValue({
+      id: patientId,
+      firstName: "Jean",
+      lastName: "Martin",
+      phone: "0612345678",
+      email: "jean@example.com",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      appointments: [
+        {
+          ...baseAppt,
+          id: "apt-full",
+          motif: "Douleur lombaire",
+          modalite: "Sur place",
+          lieu: "Cabinet · 12 rue de la Santé",
+          notes: "Revoir dans 3 semaines",
+        },
+        {
+          ...baseAppt,
+          id: "apt-empty",
+          // motif/modalite/lieu/notes absents → null attendu
+        },
+      ],
+    } as any);
+
+    const result = await getPatientById(patientId);
+
+    expect(result).not.toBeNull();
+    const full = result!.appointments.find((a) => a.id === "apt-full")!;
+    expect(full.motif).toBe("Douleur lombaire");
+    expect(full.modalite).toBe("Sur place");
+    expect(full.lieu).toBe("Cabinet · 12 rue de la Santé");
+    expect(full.note).toBe("Revoir dans 3 semaines");
+
+    const empty = result!.appointments.find((a) => a.id === "apt-empty")!;
+    expect(empty.motif).toBeNull();
+    expect(empty.modalite).toBeNull();
+    expect(empty.lieu).toBeNull();
+    expect(empty.note).toBeNull();
+  });
+
+  it("9.4-INT-002: updatePatient expose motif/modalite/lieu et note (← notes) dans les RDV retournés", async () => {
+    vi.mocked(prisma.patient.update).mockResolvedValue({
+      id: patientId,
+      firstName: "Jean",
+      lastName: "Martin",
+      phone: "0612345678",
+      email: "jean@example.com",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      appointments: [
+        {
+          id: "apt-1",
+          startTime: new Date("2026-06-01T09:00:00Z"),
+          endTime: new Date("2026-06-01T09:30:00Z"),
+          status: "CONFIRMED",
+          type: "Téléconsultation",
+          motif: "Suivi",
+          modalite: "Vidéo",
+          lieu: null,
+          notes: "Lien visio envoyé",
+        },
+      ],
+    } as any);
+
+    const result = await updatePatient(patientId, {
+      firstName: "Jean",
+      lastName: "Martin",
+      phone: "0612345678",
+      email: "jean@example.com",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const appt = result.patient.appointments[0];
+      expect(appt.motif).toBe("Suivi");
+      expect(appt.modalite).toBe("Vidéo");
+      expect(appt.lieu).toBeNull();
+      expect(appt.note).toBe("Lien visio envoyé");
+    }
   });
 });

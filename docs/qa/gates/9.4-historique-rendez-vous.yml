@@ -1,0 +1,121 @@
+# Quality Gate — Story 9.4 : Historique des rendez-vous
+# Généré par Quinn (Test Architect) via *review (boucle /bmad-loop, formalisation a posteriori).
+schema: 1
+story: "9.4"
+story_title: "Historique des rendez-vous (vue chronologique premium du dossier patient)"
+gate: PASS
+status_reason: >-
+  10/10 AC couverts. Modèle Appointment étendu de 3 colonnes optionnelles (motif/modalite/lieu)
+  + migration non destructive (ADD COLUMN only) ; la « Note » réutilise Appointment.notes. Mapping
+  serveur (getPatientById/updatePatient) des 4 champs désormais couvert par tests 9.4-INT-001/002.
+  Composant AppointmentHistory (filtres + compteurs, lignes dépliables Motif/Durée/Modalité/Lieu/Note,
+  badges, pagination « charger plus », état vide) purement présentationnel, sans surface réseau.
+  Refonte UI des sections 9.1/9.2/9.3 sans rupture de contrat (suites existantes vertes). Suite
+  complète verte (74 fichiers / 691 tests, +2 vs baseline 689, aucune régression). Build OK.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-26T03:30:00Z"
+
+waiver:
+  active: false
+
+quality_score: 85
+
+top_issues:
+  - id: TEST-DEPTH-941
+    severity: medium
+    finding: >-
+      Le composant AppointmentHistory (~567 lignes) porte une logique présentationnelle réelle
+      (calcul de durée formatDuration, compteurs de filtres, pagination charger-plus, mapping
+      statut/type) qui n'est vérifiée que par inspection : ni test composant ni E2E. Les helpers
+      purs (formatDuration, typeVisual, initialsOf, counts) ne sont pas exportés, donc non
+      unit-testables en l'état.
+    status: open
+    mitigation: >-
+      Politique dépôt établie (UI non unit-testée ; infra E2E indisponible — cf. 3.6/5.2). La
+      logique de DONNÉES (mapping serveur + tri desc) EST couverte (9.4-INT-001/002). Suivi :
+      exporter les helpers purs pour les unit-tester, et ajouter un test composant/E2E (filtre,
+      dépliage, durée, pagination) une fois l'infra E2E disponible (CI 13.1).
+  - id: RGPD-PROD-941
+    severity: medium
+    finding: >-
+      L'historique affiche des données de santé (art. 9 RGPD), comme l'ensemble du dossier patient
+      (9.1/9.2/9.3). Lecture sécurisée (actions déjà protégées par requireUser, aucune surface
+      publique) mais chiffrement (11.4), audit (11.3) et consentement/oubli (11.1/11.2) non livrés.
+    status: accepted_by_design
+    mitigation: >-
+      Mise en PRODUCTION de tout le dossier patient conditionnée à l'arbitrage PO/RGPD (épopée 11),
+      cohérent avec 9.2/9.3. Réserve documentée dans la story.
+  - id: PROCESS-941
+    severity: low
+    finding: >-
+      Code initialement livré directement (commit 02c3b00) HORS boucle BMAD : aucun fichier story,
+      aucune gate QA, ROADMAP non mise à jour au moment du commit. De plus, le message de commit
+      indique « Migration appliquée » (application en base faite hors garde-fou de boucle).
+    status: resolved
+    mitigation: >-
+      Remédié par cette boucle : story 9.4 reconstruite fidèlement au code, couverture de tests
+      manquante ajoutée (9.4-INT), revue QA + gate produites, ROADMAP mise à jour. Le garde-fou
+      « pas de migrate deploy par la boucle » reste respecté côté boucle ; l'application en base
+      d'origine est notée pour traçabilité OPS.
+
+quality_score_notes: >-
+  85 (−10 pour TEST-DEPTH-941 : logique UI riche non testée automatiquement ; −5 pour RGPD-PROD-941,
+  réserve produit/organisationnelle. PROCESS-941 résolu, sans impact sur le score).
+
+evidence:
+  tests_reviewed: 2
+  tests_status: "9.4-INT-001/002 verts (mapping motif/modalite/lieu/note dans getPatientById + updatePatient)"
+  full_baseline: "74 fichiers / 691 tests verts (baseline 9.3 = 74/689 + 2 tests 9.4)"
+  lint: "eslint sur les fichiers SOURCE 9.4 = 0 problème ; `as any` des fichiers de test = dette baseline connue (cf. CI 13.1)"
+  types: "tsc --noEmit = 11 erreurs baseline pré-existantes (test files calendar/dashboard/patients, lignes < ajouts 9.4) ; 0 dans les fichiers 9.4"
+  build: "next build : Compiled successfully (exit 0) ; /dashboard/patients/[id] rendu dynamiquement"
+  risk_summary: >-
+    Risque technique faible : champs additifs optionnels (rétro-compatibles, RDV existants NULL) ;
+    composant purement présentationnel sans surface réseau ; lecture via actions déjà sécurisées
+    (2.2). Risque principal = profondeur de test UI (TEST-DEPTH-941) et conformité RGPD (RGPD-PROD-941).
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    ac_gaps: []
+    notes: >-
+      AC2/AC10 (mapping serveur des 4 champs + tri desc) couverts par 9.4-INT-001/002. AC9 (refonte
+      UI sans rupture de contrat) prouvé par la persistance verte des suites 9.1/9.2/9.3. AC1 (migration)
+      validé au niveau schéma/migration (non unit-testable sans base, cohérent 9.1/9.2/9.3). AC3–AC8
+      (comportement riche du composant : filtres+compteurs, dépliage, durée calculée, premium/reduced-motion,
+      pagination/squelettes/état vide, montage) vérifiés par INSPECTION — voir TEST-DEPTH-941.
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >-
+      Aucune nouvelle surface réseau : AppointmentHistory est présentationnel (ni Server Action ni fetch).
+      L'accès aux RDV passe par getPatientById/updatePatient déjà protégées par requireUser() (2.2). Champs
+      additifs en lecture seule ; Prisma paramétré ; aucune URL/fichier public.
+  performance:
+    status: PASS
+    notes: >-
+      RDV triés en base (startTime desc) ; pagination côté client (PAGE_SIZE 5 / PAGE_STEP 3) sur volumétrie
+      patient faible (single-tenant). Animations respectant prefers-reduced-motion. Aucun appel réseau superflu.
+  reliability:
+    status: PASS
+    notes: >-
+      Champs optionnels (?? null) rétro-compatibles : RDV historiques sans détail → tiret «—». Filtres/compteurs
+      dérivés de la liste, repli des lignes au changement de filtre, nettoyage du timer de pagination au démontage.
+      Statut/type inconnus → fallback visuel sûr.
+  maintainability:
+    status: PASS
+    notes: >-
+      Kit visuel partagé (patient-record-ui) factorisant les 4 sections du dossier. Composant typé strict, JSDoc
+      soignée, handoff Claude Design tracé. eslint source = 0. Dette `as any`/narrowing des fichiers de test =
+      baseline connue, non aggravée (mapping 9.4 ajouté sans nouvelle erreur tsc).
+
+recommendations:
+  immediate:
+    - action: "OPS : confirmer l'application en base de la migration 20260626000014_add_appointment_detail_fields (le commit la déclare appliquée ; vérifier l'état des environnements cibles)."
+      refs: ["prisma/migrations/20260626000014_add_appointment_detail_fields/migration.sql"]
+    - action: "PO/RGPD : intégrer l'historique RDV au même arbitrage d'exposition production que 9.1/9.2/9.3 (RGPD-PROD-941)."
+      refs: ["docs/stories/9.4.historique-rendez-vous.story.md", "docs/architecture/5-stockage-fichiers-decision.md"]
+  future:
+    - action: "TEST-DEPTH-941 : exporter et unit-tester les helpers purs (formatDuration, typeVisual, counts) ; ajouter un test composant/E2E du parcours (filtre, dépliage, durée, charger-plus) une fois l'infra E2E disponible."
+      refs: ["components/patients/appointment-history.tsx", "tests/e2e/"]
+    - action: "Épopée 11 : chiffrement (11.4), audit (11.3), consentement/oubli (11.1/11.2) couvrant tout le dossier patient (notes + documents + antécédents + historique)."
+      refs: ["docs/stories/ROADMAP.md"]

@@ -97,7 +97,7 @@ Ces stories ont été **retirées du dépôt** ; elles sont conservées ici comm
 | Épopée | Stories | Thème |
 |---|---|---|
 | 8 | ~~8.1 annulation/reprogrammation~~ **→ promue au périmètre actif (Approved, 2026-06-04)** · 8.2 drag-and-drop · 8.3 vues jour/mois · 8.4 RDV récurrents · 8.5 liste d'attente | Agenda avancé |
-| 9 | 9.1 notes de consultation **(Done)** · 9.2 documents médicaux **(Done — prod conditionnée RGPD)** · 9.3 antécédents médicaux **(Done — prod conditionnée RGPD)** | Dossier patient |
+| 9 | 9.1 notes de consultation **(Done)** · 9.2 documents médicaux **(Done — prod conditionnée RGPD)** · 9.3 antécédents médicaux **(Done — prod conditionnée RGPD)** · 9.4 historique des rendez-vous **(Done — prod conditionnée RGPD)** | Dossier patient |
 | 10 | 10.1 statistiques avancées · 10.2 export données | Analytics |
 | 11 | 11.1 consentement RGPD · 11.2 droit à l'oubli/export · 11.3 journal d'audit · 11.4 chiffrement | RGPD / Sécurité |
 | 12 | 12.1 acompte Stripe · 12.2 facturation PDF | Paiement (dépend de 7.3) |
@@ -126,3 +126,4 @@ Ces stories ont été **retirées du dépôt** ; elles sont conservées ici comm
 | 2026-06-04 | 1.1 | Statut 5.3 réconcilié (périmètre mergé, commit `c09e8cb`). Story 8.1 (reprogrammation patient self-service) promue du backlog au périmètre actif (Approved) ; 8.2→8.5 restent au backlog. | PO (Sarah) |
 | 2026-06-25 | 1.2 | Épopée 9 ouverte : 9.1 (notes) et 9.2 (documents médicaux) → Done. ADR §5 « Stockage de fichiers » acté ([architecture/5](../architecture/5-stockage-fichiers-decision.md)). 9.2 : mise en production conditionnée à un arbitrage RGPD (épopée 11). | Architect / SM / Dev / QA (boucle BMAD) |
 | 2026-06-25 | 1.3 | Story 9.3 (antécédents médicaux : fond clinique structuré et catégorisé) → Done (gate QA PASS, 74 fichiers / 689 tests verts). Mise en production conditionnée au même arbitrage RGPD (épopée 11) que 9.1/9.2. | SM / Dev / QA (boucle BMAD) |
+| 2026-06-26 | 1.4 | Story 9.4 (historique des rendez-vous : vue chronologique premium + champs `motif`/`modalite`/`lieu` sur `Appointment`) **formalisée a posteriori** (code livré hors boucle au commit `02c3b00`) : story reconstruite, tests de mapping `9.4-INT` ajoutés, revue QA **PASS** (gate, score 85, 74 fichiers / 691 tests verts) → Done. Réserves : `TEST-DEPTH-941` (logique UI vérifiée par inspection) et même arbitrage RGPD (épopée 11) que 9.1/9.2/9.3. | SM / Dev / QA (boucle BMAD) |
