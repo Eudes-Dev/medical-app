@@ -110,7 +110,7 @@ nfr_validation:
 
 recommendations:
   immediate:
-    - action: "OPS : confirmer l'application en base de la migration 20260626000014_add_appointment_detail_fields (le commit la déclare appliquée ; vérifier l'état des environnements cibles)."
+    - action: "OPS : RÉSOLU le 2026-06-26. Migration 20260626000014_add_appointment_detail_fields VÉRIFIÉE appliquée et tracée — `prisma migrate status` = 17 migrations, « schema up to date » (enregistrée dans _prisma_migrations, pas un db push) ; `prisma migrate diff` DB↔datamodel = vide (colonnes motif/modalite/lieu présentes, aucune dérive)."
       refs: ["prisma/migrations/20260626000014_add_appointment_detail_fields/migration.sql"]
     - action: "PO/RGPD : intégrer l'historique RDV au même arbitrage d'exposition production que 9.1/9.2/9.3 (RGPD-PROD-941)."
       refs: ["docs/stories/9.4.historique-rendez-vous.story.md", "docs/architecture/5-stockage-fichiers-decision.md"]
