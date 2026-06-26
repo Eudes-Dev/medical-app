@@ -1,0 +1,120 @@
+# Quality Gate — Story 13.1 : Pipeline CI/CD GitHub Actions
+# Généré par Quinn (Test Architect) via *review (boucle /bmad-loop, formalisation a posteriori).
+schema: 1
+story: "13.1"
+story_title: "Pipeline CI/CD GitHub Actions (débloque l'exécution E2E 3.6/5.2)"
+gate: PASS
+status_reason: >-
+  10/10 AC couverts. Workflow .github/workflows/ci.yml (commit 0e2065e) : déclencheurs push main +
+  pull_request, concurrence cancel-in-progress. Job `test` (Postgres jetable postgres:16) — portes
+  dures `npm run test:run` (Vitest, sans base) et `npm run build` (précédé de migrate deploy sur base
+  CI jetable) ; portes informatives lint + tsc (continue-on-error, dette baseline assumée). Job `e2e`
+  opt-in (vars.E2E_ENABLED) débloquant enfin les suites Playwright 3.6/5.2, réutilisant l'infra de test
+  existante + garde-fou anti-prod. Aucun code applicatif, aucune migration, aucune dépendance ajoutée.
+  Porte dure principale reproduite localement : 91 fichiers / 800 tests verts. Build validé sur l'arbre
+  courant (boucle 10.2). CD (Vercel) hors périmètre (13.2) ; pas de migrate deploy prod (OPS-002).
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-26T17:20:00Z"
+
+waiver:
+  active: false
+
+quality_score: 90
+
+top_issues:
+  - id: BASELINE-131
+    severity: low
+    finding: >-
+      Les portes lint (`npm run lint`) et type-check (`npx tsc --noEmit`) sont en
+      `continue-on-error: true` (informatives, non bloquantes). La CI ne casse donc pas sur les
+      erreurs eslint/tsc, qui restent tolérées.
+    status: accepted_by_design
+    mitigation: >-
+      Choix assumé et documenté dans l'en-tête du workflow : dette baseline connue (apostrophes JSX,
+      `as any` des mocks de test, narrowing de filtres Prisma — TEST-BASELINE-001). Rendre ces portes
+      dures ferait échouer la CI sur de la dette pré-existante non liée à la PR. Durcissement = story
+      future une fois la dette résorbée. Les portes FONCTIONNELLES (Vitest + build) restent dures.
+  - id: PROCESS-131
+    severity: low
+    finding: >-
+      Workflow initialement livré directement (commit 0e2065e) HORS boucle BMAD : aucun fichier story,
+      aucune gate QA, 13.1 resté listé « backlog post-MVP » sans fichier au ROADMAP au moment du commit.
+    status: resolved
+    mitigation: >-
+      Remédié par cette boucle : story 13.1 reconstruite fidèlement au workflow committé, gate QA
+      produite, ROADMAP mis à jour (épopée 13 ouverte). Aucune nouvelle surface applicative à couvrir
+      (artefact d'infra déclaratif).
+  - id: OPS-131
+    severity: low
+    finding: >-
+      La validité « end-to-end » du pipeline (exécution réelle sur GitHub Actions) et l'activation du
+      job e2e (pose de la variable E2E_ENABLED + secrets Supabase de test) ne sont pas vérifiables
+      dans la boucle : elles requièrent un push + une configuration de dépôt humaine.
+    status: open
+    mitigation: >-
+      Action ops/humaine : pousser sur main/ouvrir une PR pour observer le premier run vert, puis poser
+      E2E_ENABLED=true + les 3 secrets SUPABASE_*_TEST (cf. .env.test.example) pour activer 3.6/5.2.
+      Hors garde-fou de boucle (pas de push automatique). Les portes dures sont reproductibles localement
+      (Vitest 91/800 vert), ce qui borne fortement le risque d'un premier run rouge.
+
+quality_score_notes: >-
+  90 (−5 pour BASELINE-131 : lint/types non bloquants, dette baseline assumée ; −5 pour OPS-131 :
+  exécution réelle/activation e2e non vérifiables en boucle. PROCESS-131 résolu, sans impact sur le score).
+
+evidence:
+  tests_reviewed: 0
+  tests_status: "Artefact CI non unit-testable ; aucun test ajouté (aucun code applicatif livré)"
+  full_baseline: "91 fichiers / 800 tests verts (identique à la baseline 10.2 du ROADMAP — aucune régression)"
+  lint: "Inchangé : la story n'ajoute aucun fichier source ; lint/tsc restent en dette baseline connue (TEST-BASELINE-001)"
+  types: "Inchangé (aucun fichier .ts/.tsx applicatif ajouté)"
+  build: "next build validé sur l'arbre courant (HEAD = 57a7f07 story 10.2, build rapporté vert par sa boucle ; la CI fait partie de cet arbre)"
+  risk_summary: >-
+    Risque technique très faible : artefact d'infra déclaratif (YAML), aucun code applicatif, aucune
+    migration, aucune dépendance. Garde-fous réutilisés (anti-prod base E2E ; replis factices secrets ;
+    e2e opt-in protégeant les forks). Risque principal = premier run réel non observé en boucle (OPS-131,
+    borné par la reproductibilité locale des portes dures) et portes lint/types non bloquantes (BASELINE-131).
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    ac_gaps: []
+    notes: >-
+      AC1–AC9 vérifiés par INSPECTION du workflow .github/workflows/ci.yml (déclencheurs, concurrence,
+      service Postgres, steps, portes dures/informatives, job e2e opt-in, upload-artifact, hors-périmètre
+      CD). AC5/AC10 (portes dures) prouvés par exécution locale `npm run test:run` (91/800 verts) + build
+      validé sur l'arbre courant (boucle 10.2). Un workflow CI n'est pas unit-testable ; sa validité
+      end-to-end relève d'une exécution réelle GitHub Actions (OPS-131).
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >-
+      Secrets non exposés (référencés via secrets.* ; repli factice non sensible pour le job test). Base E2E
+      protégée par le garde-fou anti-prod réutilisé (reset-e2e-db.ts / global-setup.ts refusent une URL
+      contenant prod/production). Job e2e opt-in : pas d'exécution sur forks sans secrets. Aucun secret en clair.
+  reliability:
+    status: PASS
+    notes: >-
+      Concurrence cancel-in-progress (pas d'exécutions concurrentes obsolètes). Health-check Postgres avant
+      usage. `needs: test` (e2e seulement si test vert). Upload du rapport Playwright `if: !cancelled()`.
+      Build adossé à une base jetable migrée (parité avec le build Vercel).
+  maintainability:
+    status: PASS
+    notes: >-
+      Workflow abondamment commenté (rôle, secrets requis, garde-fous, raison du Postgres jetable). Réutilise
+      les scripts npm et l'infra de test existants (3.6/5.2) sans duplication. Actions épinglées en versions
+      majeures courantes (checkout@v4, setup-node@v4, upload-artifact@v4).
+  performance:
+    status: PASS
+    notes: >-
+      N/A applicatif (artefact CI). Cache npm activé ; e2e séparé et opt-in pour ne pas alourdir chaque PR.
+
+recommendations:
+  immediate:
+    - action: "OPS : pousser sur main / ouvrir une PR pour observer le premier run CI réel (porte dure Vitest + build)."
+      refs: [".github/workflows/ci.yml"]
+  future:
+    - action: "Activer le job e2e : poser la variable de dépôt E2E_ENABLED=true + les secrets SUPABASE_URL_TEST / SUPABASE_ANON_KEY_TEST / SUPABASE_SERVICE_ROLE_KEY_TEST (cf. .env.test.example) — débloque enfin 3.6/5.2 en CI."
+      refs: [".env.test.example", "docs/stories/3.6.dette-runner-e2e-calendrier.story.md", "docs/stories/5.2.securisation-tests.story.md"]
+    - action: "BASELINE-131 : une fois la dette eslint/tsc résorbée, passer lint + type-check en portes dures (retirer continue-on-error)."
+      refs: ["docs/stories/ROADMAP.md"]
+    - action: "Épopée 13 : poursuivre avec 13.2 (déploiement Vercel / CD), 13.3 (monitoring Sentry), 13.4 (backups DB)."
+      refs: ["docs/stories/ROADMAP.md#épopée-13"]
