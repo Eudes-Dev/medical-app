@@ -32,6 +32,7 @@ import { ConsultationNotes } from "@/components/patients/consultation-notes";
 import { MedicalDocuments } from "@/components/patients/medical-documents";
 import { MedicalHistory } from "@/components/patients/medical-history";
 import { ConsentSection } from "@/components/patients/consent-section";
+import { DataRightsSection } from "@/components/patients/data-rights-section";
 import { getPatientById } from "@/app/dashboard/patients/actions";
 import { getConsultationNotes } from "@/app/dashboard/patients/consultation-note-actions";
 import { getMedicalDocuments } from "@/app/dashboard/patients/medical-document-actions";
@@ -117,6 +118,13 @@ export default async function PatientDetailPage(
           {/* Story 11.1 — consentement RGPD (traçabilité par finalité). */}
           <div className="w-full max-w-5xl">
             <ConsentSection patientId={id} records={consentRecords} />
+          </div>
+          {/* Story 11.2 — droits RGPD du patient (export / droit à l'oubli). */}
+          <div className="w-full max-w-5xl">
+            <DataRightsSection
+              patientId={id}
+              patientName={`${patient.firstName} ${patient.lastName}`}
+            />
           </div>
         </main>
       </SidebarInset>

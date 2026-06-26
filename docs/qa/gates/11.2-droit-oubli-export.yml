@@ -1,0 +1,129 @@
+# Quality Gate — Story 11.2 : Droit à l'oubli & export des données patient
+# Généré par Quinn (Test Architect) via *review.
+schema: 1
+story: "11.2"
+story_title: "Droit à l'oubli & export des données patient (portabilité art. 20 + effacement art. 17)"
+gate: PASS
+status_reason: >-
+  8/8 AC couverts. Module pur d'export RGPD (déterministe, dates ISO, métadonnées documents SANS
+  storagePath) ; 2 Server Actions sécurisées (requireUser + assertValidUuid avant Prisma/Storage) :
+  exportPatientData (agrégation findUnique+include → JSON indenté, nom de fichier slug anti-traversal)
+  et erasePatientData (purge Storage best-effort PUIS patient.delete cascade FK). removeObjects ajouté
+  au module Storage (no-op si vide). UI fiche patient : export téléchargé côté navigateur (Blob+ancre)
+  + zone danger effacement avec confirmation irréversible et redirection. AUCUN changement de schéma
+  (cascades FK existantes + agrégation de modèles). Suite verte 78 fichiers / 729 tests (+2 fichiers /
+  +19 vs 11.1, 0 régression). Lint propre, tsc sans nouvelle erreur, build OK.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-26T05:00:00Z"
+
+waiver:
+  active: false
+
+quality_score: 88
+
+top_issues:
+  - id: RGPD-PROD-1102
+    severity: medium
+    finding: >-
+      11.2 livre les DROITS du patient (portabilité art. 20 via export structuré + droit à
+      l'effacement art. 17 via suppression DB+Storage) mais ne lève PAS seule la réserve de mise en
+      production du dossier patient : le journal d'audit append-only des accès/effacements (11.3) et
+      le chiffrement applicatif (11.4) ne sont pas livrés.
+    status: accepted_by_design
+    mitigation: >-
+      Mise en PRODUCTION de tout le dossier patient reste conditionnée à un arbitrage PO/RGPD couvrant
+      l'ensemble de l'épopée 11. Réserve documentée dans la story (Dev Notes) et le ROADMAP, cohérente
+      avec 9.x / 11.1.
+  - id: ERASE-NOTFOUND-MSG
+    severity: low
+    finding: >-
+      erasePatientData sur un patient inexistant retourne un message FR générique ("Une erreur est
+      survenue lors de la suppression…") au lieu d'un message « Patient introuvable » dédié (le
+      patient.delete lève P2025 capté par le catch générique). Comportement correct (success:false,
+      FR), sémantiquement moins précis que exportPatientData.
+    status: accepted_by_design
+    mitigation: >-
+      Cosmétique : le flux UI part toujours d'un patient affiché (existant). À affiner si un message
+      dédié devient nécessaire (non bloquant).
+  - id: ERASE-TX-BESTEFFORT
+    severity: low
+    finding: >-
+      erasePatientData enchaîne findMany(storagePath) → removeObjects → patient.delete hors
+      transaction unique. Un document ajouté entre la lecture et la suppression pourrait laisser un
+      objet Storage orphelin ; un échec Storage est volontairement non bloquant (best-effort).
+    status: accepted_by_design
+    mitigation: >-
+      Best-effort assumé (même politique que deleteMedicalDocument) pour ne pas rendre un patient
+      « non supprimable ». La traçabilité des effacements partiels relève du journal d'audit 11.3.
+
+quality_score_notes: >-
+  88 (−10 réserve RGPD-PROD-1102 organisationnelle/produit ; −2 pour les deux constats mineurs
+  ERASE-NOTFOUND-MSG / ERASE-TX-BESTEFFORT, acceptés par conception). Aucun défaut de code bloquant.
+
+evidence:
+  tests_reviewed: 19
+  tests_status: "19/19 verts sur le périmètre 11.2 (unit 9, integration 10)"
+  full_baseline: "78 fichiers / 729 tests (baseline 11.1 = 76/710 + 2 fichiers / 19 tests 11.2) ; suite entièrement verte (le flaky historique 2.1-E2E-004 passe également)"
+  risk_summary: >-
+    Risque technique faible : feature additive single-tenant, orthogonale au cœur agenda ; AUCUN
+    changement de schéma (réutilise cascades FK existantes) ; module d'export pur et déterministe ;
+    purge Storage best-effort comblant la lacune d'objets orphelins de deletePatient. Risque de
+    conformité (RGPD) porté hors code par RGPD-PROD-1102 (avancement partiel de l'épopée 11).
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+    notes: >-
+      AC1 couvert par UNIT-001..009 (métadonnées en-tête, toutes sections, JAMAIS storagePath, dates
+      ISO, tri déterministe, sérialisable, nom de fichier sûr anti-traversal + fallback). AC2 par
+      INT-001..004 (non-auth/UUID invalide sans Prisma, introuvable → erreur, succès → include
+      attendu + JSON parseable + storagePath absent). AC3 par INT-005..010 (sécurité, purge Storage
+      PUIS delete + revalidate, best-effort si Storage échoue, liste vide, introuvable → erreur).
+      AC4 (removeObjects) exercé via INT-007/008/009 (no-op liste vide vérifié). AC5/6/7 (UI : section
+      montée après consentement, export Blob/ancre côté navigateur, confirmation irréversible +
+      redirection) vérifiés par inspection — rendu non unit-testé (politique identique à 9.x/11.1),
+      logique sous-jacente couverte par les actions. AC8 (TOAST_MESSAGES.dataRights + ROADMAP) présent.
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >-
+      `requireUser()` en tête des 2 actions (testé : non-auth → échec sans Prisma — INT-001/005).
+      `assertValidUuid()` avant tout Prisma/Storage (testé : UUID invalide → échec sans Prisma ni
+      Storage — INT-002/006). storagePath JAMAIS exposé (UNIT-003 + assertion chaîne JSON INT-004).
+      Nom de fichier slug ASCII anti-traversal (pas de / \ .. — UNIT-008). Prisma paramétré ; aucune
+      surface publique (section réservée au dashboard authentifié). Téléchargement généré côté client
+      (pas de route fichier serveur exposée).
+  performance:
+    status: PASS
+    notes: >-
+      Export : un findUnique avec include borné (relations d'un seul patient) ; assemblage O(n) +
+      tri stable. Effacement : un findMany(select storagePath) + une suppression par lot Storage
+      (removeObjects, no-op si vide) + un patient.delete (cascade FK déléguée à la base). Aucun appel
+      réseau superflu.
+  reliability:
+    status: PASS
+    notes: >-
+      Effacement best-effort : un échec Storage est journalisé mais ne bloque pas la suppression DB
+      (évite un patient non supprimable) — testé INT-008. Ordre purge→delete respecté (INT-007).
+      Formes de retour discriminées { success } homogènes avec 9.x/11.1 ; erreurs mappées FR sans
+      fuite d'id. Module d'export pur et déterministe (sortie stable, entièrement sérialisable).
+  maintainability:
+    status: PASS
+    notes: >-
+      Patterns du dépôt respectés (actions calquées sur actions.ts/medical-document-actions, harnais
+      de test identique à medical-history-actions). Logique d'export isolée dans un module pur sans
+      Prisma/Supabase (testable unit) ; removeObjects cohérent avec removeObject ; messages via
+      TOAST_MESSAGES.dataRights ; kit UI partagé patient-record-ui réutilisé. AUCUN changement de
+      schéma → pas de migration ni d'étape OPS (plus simple que 11.1).
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Épopée 11 : journal d'audit append-only des accès/exports/effacements (11.3) — tracerait notamment les effacements partiels Storage (ERASE-TX-BESTEFFORT) ; chiffrement applicatif (11.4)."
+      refs: ["docs/stories/ROADMAP.md"]
+    - action: "PO/RGPD : 11.2 ne lève pas seule la réserve d'exposition production (RGPD-PROD-1102) — arbitrage couvrant toute l'épopée 11."
+      refs: ["docs/stories/11.2.droit-oubli-export.story.md", "docs/stories/ROADMAP.md"]
+    - action: "Envisager d'unifier deletePatient (cascade DB seule) et erasePatientData (purge Storage + DB) pour éviter deux chemins de suppression, et/ou inclure MessageLog dans l'export si la portabilité doit couvrir l'historique des communications."
+      refs: ["app/dashboard/patients/actions.ts", "app/dashboard/patients/data-rights-actions.ts"]
+    - action: "Couverture E2E (Playwright) du parcours export/effacement une fois l'infra E2E disponible (cf. 3.6/5.2)."
+      refs: ["tests/e2e/"]

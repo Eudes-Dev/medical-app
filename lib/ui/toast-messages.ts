@@ -75,6 +75,12 @@ export const TOAST_MESSAGES = {
     revoked: "Consentement retiré.",
     reset: "Consentement réinitialisé.",
   },
+  // Story 11.2 — droits RGPD du patient (portabilité art. 20 + effacement art. 17).
+  dataRights: {
+    exported: "Données exportées.",
+    erased: "Patient et données supprimés définitivement.",
+    exportFailed: "L'export des données a échoué. Veuillez réessayer.",
+  },
   // Story 8.5 — liste d'attente. Les comptes dynamiques (« 2 patients en attente
   // pour ce créneau ») sont composés côté composant (pas de clé par valeur).
   waitlist: {

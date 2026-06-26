@@ -90,3 +90,26 @@ export async function removeObject(path: string): Promise<void> {
     throw new Error(`Storage: échec de suppression de l'objet (${error.message})`);
   }
 }
+
+/**
+ * Supprime un **lot** d'objets du bucket (droit à l'oubli — story 11.2).
+ *
+ * No-op si la liste est vide (évite un appel réseau inutile). Utilisée par
+ * l'effacement RGPD d'un patient pour purger en une fois tous ses documents.
+ *
+ * @throws {Error} Si Supabase Storage renvoie une erreur.
+ */
+export async function removeObjects(paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+
+  const supabase = await createClient();
+  const { error } = await supabase.storage
+    .from(MEDICAL_DOCS_BUCKET)
+    .remove(paths);
+
+  if (error) {
+    throw new Error(
+      `Storage: échec de suppression des objets (${error.message})`
+    );
+  }
+}
