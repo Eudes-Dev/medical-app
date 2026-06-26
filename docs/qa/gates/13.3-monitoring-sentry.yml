@@ -1,0 +1,119 @@
+# Quality Gate — Story 13.3 : Monitoring des erreurs Sentry (gated, RGPD-safe)
+# Généré par Quinn (Test Architect) via *review (boucle /bmad-loop).
+schema: 1
+story: "13.3"
+story_title: "Monitoring des erreurs Sentry (gated, RGPD-safe)"
+gate: PASS
+status_reason: >-
+  8/8 AC couverts. Intégration @sentry/nextjs ^10 (compatible Next 16, peer next ^16.0.0-0)
+  ACTIVÉE uniquement si un DSN est présent (no-op total sinon — pattern SMS_ENABLED / chiffrement).
+  Logique pure isolée et testée (lib/observability/sentry.ts) : gating, environnement, sampling,
+  et surtout expurgation RGPD `scrubSentryEvent` (suppression user/cookies/corps/en-têtes d'auth,
+  redaction des tokens d'URL) branchée en `beforeSend` server/edge/client, avec sendDefaultPii=false
+  et Session Replay désactivé. Wiring App Router (instrumentation.ts + onRequestError, configs
+  server/edge, instrumentation-client.ts) ; next.config enveloppé par withSentryConfig (silent,
+  source maps gated sur SENTRY_AUTH_TOKEN). Aucun compte/DSN réel créé, aucun événement émis, aucun
+  secret committé. Preuve : 13 tests unitaires verts, suite complète 93 fichiers / 819 tests verte,
+  `next build` vert (type-check inclus) sur Next 16 + Turbopack.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-26T20:16:00Z"
+
+waiver:
+  active: false
+
+quality_score: 90
+
+top_issues:
+  - id: RGPD-133
+    severity: medium
+    finding: >-
+      Le SDK Sentry capture par défaut un contexte riche (URL, en-têtes, corps, IP, identité)
+      — vecteur de fuite de données de santé pour une app patient.
+    status: mitigated
+    mitigation: >-
+      Défense en profondeur : sendDefaultPii=false + beforeSend=scrubSentryEvent (pur, testé par
+      13.3-UNIT-010/011 : retire user/cookies/corps/en-têtes cookie+authorization, redacte les
+      tokens de query_string et d'url) + Session Replay désactivé (replays*SampleRate=0). Runbook
+      docs/ops/13.3-monitoring-sentry.md rappelle de ne pas réactiver Replay/PII sans revue RGPD et
+      de garder les tests verts. Risque résiduel borné aux champs non anticipés d'un futur SDK.
+  - id: DEPS-133
+    severity: low
+    finding: >-
+      L'ajout de @sentry/nextjs amène une large arborescence transitive ; `npm install` rapporte
+      26 vulnérabilités (1 low, 8 moderate, 15 high, 2 critical) sur l'ensemble de l'arbre.
+    status: open
+    mitigation: >-
+      À auditer hors story (npm audit) : majoritairement transitif et antérieur ; non spécifique au
+      chemin runtime exécuté (Sentry inerte sans DSN). Recommandation : triage `npm audit` dédié,
+      éventuellement story de durcissement dépendances.
+  - id: OPS-133
+    severity: low
+    finding: >-
+      L'émission réelle d'événements vers Sentry (et la vérification de l'absence de PII côté
+      dashboard) nécessite un DSN réel et un déploiement — non vérifiable dans la boucle.
+    status: open
+    mitigation: >-
+      Action ops/humaine documentée (runbook §6) : créer le projet (plan gratuit), poser le DSN,
+      déclencher une erreur de test, confirmer la réception ET l'absence de données patient. Le
+      scrubbing est prouvé unitairement ; le build prouve l'intégration.
+
+quality_score_notes: >-
+  90 (−5 RGPD-133 : risque intrinsèque du SDK, mitigé et testé mais à surveiller ; −5 cumul
+  DEPS-133/OPS-133 : audit dépendances à mener + activation réelle non vérifiable en boucle).
+
+evidence:
+  tests_reviewed: 13
+  tests_status: "13 tests unitaires (13.3-UNIT-001..013) verts — gating, env, sampling, redaction, scrubbing PII (pureté incluse), baseSentryOptions RGPD-safe"
+  full_baseline: "93 fichiers / 819 tests verts (baseline 92/806 de 13.2 + 13 nouveaux ; aucune régression)"
+  lint: "Modules ajoutés typés stricts (générique scrubSentryEvent<T>, pas de any non maîtrisé) ; dette baseline TEST-BASELINE-001 inchangée"
+  types: "next build exécute tsc sur tout le projet → VERT (le mismatch initial beforeSend/ErrorEvent a été corrigé en rendant scrubSentryEvent générique)"
+  build: "`npm run build` VERT avec withSentryConfig sur Next 16 + Turbopack (compilation + type-check OK ; Sentry inerte sans DSN ; source maps non uploadées sans SENTRY_AUTH_TOKEN)"
+  risk_summary: >-
+    Risque maîtrisé. La surface sensible (envoi de données patient à un tiers) est neutralisée par
+    une expurgation pure et testée + sendDefaultPii=false + Replay off, et le tout est désactivé par
+    défaut (no-op sans DSN). Changements réversibles. Résiduels : audit dépendances transitives
+    (DEPS-133) et validation réelle en prod (OPS-133), tous deux hors boucle.
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+    notes: >-
+      AC1 (dép. + build) prouvé par build vert. AC2 (gating) par 13.3-UNIT-001..004 + init exclusif si
+      isSentryEnabled. AC3 (wiring) par inspection (instrumentation.ts/onRequestError, configs runtime,
+      withSentryConfig gated token) + build vert. AC4/4bis (scrubbing + replay off) par 13.3-UNIT-008..013.
+      AC5 (sampling/env) par 13.3-UNIT-005..007. AC6 (.env.example + required-env optionnelles + runbook)
+      par inspection. AC7 (aucune action irréversible/secret) vérifié (diff = code/config/doc ; .env* gitignoré ;
+      aucun DSN). AC8 (portes) prouvé (suite 819 verte + build vert).
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >-
+      Coeur de la story. sendDefaultPii=false + scrubSentryEvent (cookies/corps/auth/user retirés,
+      tokens d'URL redactés) + Replay désactivé. Aucun DSN/secret committé. Le module n'expose aucune
+      donnée ; il décide seulement d'activer/expurger. Test garde-fou de pureté (non-mutation) inclus.
+  reliability:
+    status: PASS
+    notes: >-
+      No-op robuste sans DSN (aucune init, aucun warning) → previews/CI/dev inchangés. onRequestError
+      capture les erreurs serveur ; build gated sur token évite tout échec d'upload source maps.
+  maintainability:
+    status: PASS
+    notes: >-
+      Logique pure centralisée et abondamment commentée ; init server/edge/client minimalistes
+      délèguent toutes à baseSentryOptions (DRY) ; runbook clair. scrubSentryEvent générique = couplage
+      nul aux types du SDK tout en restant type-safe.
+  performance:
+    status: PASS
+    notes: "tracesSampleRate défaut 0 (erreurs seules) → overhead négligeable ; Sentry inerte sans DSN."
+
+recommendations:
+  immediate:
+    - action: "OPS : suivre docs/ops/13.3-monitoring-sentry.md (créer projet gratuit, poser le DSN en prod, déclencher une erreur de test, confirmer réception SANS donnée patient)."
+      refs: ["docs/ops/13.3-monitoring-sentry.md"]
+  future:
+    - action: "DEPS-133 : exécuter un triage `npm audit` (26 vulnérabilités sur l'arbre) — envisager une story de durcissement des dépendances."
+      refs: ["package.json"]
+    - action: "Poursuivre l'épopée 13 : 13.4 (backups DB), 13.5 (rate-limiting durci)."
+      refs: ["docs/stories/ROADMAP.md#épopée-13"]
+    - action: "Si besoin de stack traces dé-minifiées : poser SENTRY_AUTH_TOKEN/ORG/PROJECT pour activer l'upload des source maps au build."
+      refs: ["next.config.ts"]

@@ -62,6 +62,14 @@ export const ENV_VARS: readonly EnvVarSpec[] = [
   { key: "TWILIO_AUTH_TOKEN", requiredInProduction: false, description: "Token Twilio (requis seulement si SMS_ENABLED=true)" },
   { key: "TWILIO_PHONE_NUMBER", requiredInProduction: false, description: "Numéro émetteur Twilio (requis seulement si SMS_ENABLED=true)" },
   { key: "TWILIO_STATUS_WEBHOOK_SECRET", requiredInProduction: false, description: "Secret webhook statut Twilio" },
+  // --- Monitoring Sentry (story 13.3, désactivable — no-op sans DSN) ---
+  { key: "NEXT_PUBLIC_SENTRY_DSN", requiredInProduction: false, description: "DSN Sentry (client/serveur) — sans DSN, monitoring désactivé" },
+  { key: "SENTRY_DSN", requiredInProduction: false, description: "DSN Sentry serveur (repli sur NEXT_PUBLIC_SENTRY_DSN)" },
+  { key: "SENTRY_ENVIRONMENT", requiredInProduction: false, description: "Environnement Sentry (repli NODE_ENV)" },
+  { key: "SENTRY_TRACES_SAMPLE_RATE", requiredInProduction: false, description: "Taux de traces Sentry ∈ [0,1] (défaut 0)" },
+  { key: "SENTRY_AUTH_TOKEN", requiredInProduction: false, description: "Token upload source maps (build-time ; sans lui, upload désactivé)" },
+  { key: "SENTRY_ORG", requiredInProduction: false, description: "Organisation Sentry (source maps)" },
+  { key: "SENTRY_PROJECT", requiredInProduction: false, description: "Projet Sentry (source maps)" },
 ];
 
 /** Liste des clés obligatoires en production. */
