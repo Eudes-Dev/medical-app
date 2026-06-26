@@ -24,6 +24,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/server/auth";
 import { UnauthorizedError, BadRequestError } from "@/lib/errors";
 import { assertValidUuid } from "@/lib/validations/uuid";
+import { encryptField, decryptField } from "@/lib/security/crypto";
 import {
   consultationNoteSchema,
   type ConsultationNoteFormValues,
@@ -54,7 +55,9 @@ function toConsultationNoteData(note: {
     id: note.id,
     patientId: note.patientId,
     appointmentId: note.appointmentId,
-    content: note.content,
+    // Déchiffrement au repos (story 11.4) : l'appelant reçoit du clair. Les
+    // lignes legacy en clair sont renvoyées telles quelles (lecture tolérante).
+    content: decryptField(note.content),
     createdAt: note.createdAt,
     updatedAt: note.updatedAt,
   };
@@ -123,7 +126,8 @@ export async function createConsultationNote(
     const note = await prisma.consultationNote.create({
       data: {
         patientId,
-        content: parsed.data.content,
+        // Chiffrement applicatif au repos (story 11.4) sur le clair validé.
+        content: encryptField(parsed.data.content),
         appointmentId: parsed.data.appointmentId ?? null,
       },
     });
@@ -179,7 +183,8 @@ export async function updateConsultationNote(
     const note = await prisma.consultationNote.update({
       where: { id: noteId },
       data: {
-        content: parsed.data.content,
+        // Chiffrement applicatif au repos (story 11.4) sur le clair validé.
+        content: encryptField(parsed.data.content),
         appointmentId: parsed.data.appointmentId ?? null,
       },
     });

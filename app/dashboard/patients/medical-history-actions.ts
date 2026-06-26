@@ -26,6 +26,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/server/auth";
 import { UnauthorizedError, BadRequestError } from "@/lib/errors";
 import { assertValidUuid } from "@/lib/validations/uuid";
+import { encryptField, decryptField } from "@/lib/security/crypto";
 import {
   medicalHistoryEntrySchema,
   type MedicalHistoryCategory,
@@ -57,7 +58,9 @@ function toMedicalHistoryEntryData(entry: {
     id: entry.id,
     patientId: entry.patientId,
     category: entry.category,
-    content: entry.content,
+    // Déchiffrement au repos (story 11.4) : l'appelant reçoit du clair. Les
+    // lignes legacy en clair sont renvoyées telles quelles (lecture tolérante).
+    content: decryptField(entry.content),
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
   };
@@ -127,7 +130,8 @@ export async function createMedicalHistoryEntry(
       data: {
         patientId,
         category: parsed.data.category,
-        content: parsed.data.content,
+        // Chiffrement applicatif au repos (story 11.4) sur le clair validé.
+        content: encryptField(parsed.data.content),
       },
     });
 
@@ -183,7 +187,8 @@ export async function updateMedicalHistoryEntry(
       where: { id: entryId },
       data: {
         category: parsed.data.category,
-        content: parsed.data.content,
+        // Chiffrement applicatif au repos (story 11.4) sur le clair validé.
+        content: encryptField(parsed.data.content),
       },
     });
 

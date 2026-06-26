@@ -38,6 +38,7 @@ import {
 } from "@/lib/rgpd/patient-export";
 import { recordAuditEvent } from "@/lib/server/audit";
 import { formatPatientLabel } from "@/lib/rgpd/audit";
+import { decryptField } from "@/lib/security/crypto";
 
 /**
  * Exporte l'intégralité des données d'un patient au format JSON structuré
@@ -98,14 +99,16 @@ export async function exportPatientData(
       consultationNotes: patient.consultationNotes.map((n) => ({
         id: n.id,
         appointmentId: n.appointmentId,
-        content: n.content,
+        // Déchiffrement au repos (story 11.4) : l'export reste lisible (art. 20).
+        content: decryptField(n.content),
         createdAt: n.createdAt,
         updatedAt: n.updatedAt,
       })),
       medicalHistoryEntries: patient.medicalHistoryEntries.map((e) => ({
         id: e.id,
         category: e.category,
-        content: e.content,
+        // Déchiffrement au repos (story 11.4) : l'export reste lisible (art. 20).
+        content: decryptField(e.content),
         createdAt: e.createdAt,
         updatedAt: e.updatedAt,
       })),

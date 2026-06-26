@@ -1,0 +1,132 @@
+# Quality Gate — Story 11.4 : Chiffrement applicatif des données cliniques au repos
+# Généré par Quinn (Test Architect) via *review.
+schema: 1
+story: "11.4"
+story_title: "Chiffrement applicatif des données cliniques au repos"
+gate: PASS
+status_reason: >-
+  7/7 AC couverts. Module lib/security/crypto AES-256-GCM, enveloppe versionnée
+  enc:v1:<iv>:<tag>:<ciphertext> (base64url), IV aléatoire 12 o par valeur, tag 16 o, clé
+  DATA_ENCRYPTION_KEY (32 o base64) lue à chaque appel. Chiffrement authentifié (intégrité + confid.) :
+  toute altération du ciphertext/tag ou mauvaise clé fait LEVER decryptField (jamais de contenu
+  corrompu silencieux). Rétro-compatible : decryptField renvoie le clair tel quel sans préfixe
+  enc:v1: (lignes legacy lisibles) ; sans clé → passe-plat (encrypt) mais throw sur enveloppe
+  (decrypt). Frontière propre : content chiffré avant create/update et déchiffré dans le mapper pour
+  ConsultationNote (9.1) et MedicalHistoryEntry (9.3) ; export RGPD (11.2) déchiffré → JSON lisible
+  (art. 20), aucune enveloppe enc: ne fuit. AUCUN changement de schéma ni migration (texte chiffré
+  dans la colonne content existante). Suite verte 87 fichiers / 773 tests (+4 fichiers / +21 vs 11.3,
+  0 régression — suites 9.1/9.3/11.2 vertes SANS modification grâce au passe-plat sans clé). Sources
+  lint propre, tsc sans nouvelle erreur (11 baseline inchangées), build OK.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-26T11:00:00Z"
+
+waiver:
+  active: false
+
+quality_score: 88
+
+top_issues:
+  - id: RGPD-PROD-1104
+    severity: medium
+    finding: >-
+      11.4 complète le socle RGPD côté code de l'épopée 11 (consentement 11.1, droits 11.2, audit 11.3,
+      chiffrement 11.4) mais ne lève PAS automatiquement la réserve de mise en production du dossier
+      patient (9.x) : la levée effective dépend de pré-requis OPS et d'un arbitrage produit.
+    status: accepted_by_design
+    mitigation: >-
+      Levée conditionnée à un arbitrage PO/RGPD + pré-requis ops (DATA_ENCRYPTION_KEY posée en prod,
+      migrations appliquées, bucket + RLS Storage) documentés dans docs/ops/11.4-chiffrement-applicatif.md
+      et le ROADMAP. Réserve cohérente 9.x / 11.1 / 11.2 / 11.3.
+  - id: CRYPTO-KEY-MGMT
+    severity: medium
+    finding: >-
+      Clé maîtresse en variable d'environnement (DATA_ENCRYPTION_KEY), sans rotation ni HSM/KMS. Sans
+      clé, le chiffrement est DÉSACTIVÉ en silence (passe-plat) : un déploiement prod oubliant la clé
+      persisterait les contenus cliniques en clair. La perte de la clé rend les données chiffrées
+      irrécupérables.
+    status: accepted_by_design
+    mitigation: >-
+      Choix assumé/documenté (ADR §6, livrable ops) : clé obligatoire en prod (étape ops au même titre
+      que migrate deploy), sauvegarde hors base impérative, format versionné (enc:v1:) permettant une
+      rotation future. Durcissement (rotation, KMS, garde-fou « refuser de démarrer en prod sans clé »)
+      = story ultérieure.
+  - id: CRYPTO-SCOPE-RESIDUAL
+    severity: low
+    finding: >-
+      Champs cliniques hors périmètre non chiffrés : Patient.notes (champ legacy non écrit/lu par les
+      actions patient, présent seulement dans l'export), Appointment.notes/motif/modalite/lieu, et le
+      BINAIRE des documents médicaux (repose sur le chiffrement au repos Supabase Storage).
+    status: accepted_by_design
+    mitigation: >-
+      Périmètre ciblé sur les deux fonds cliniques structurés libres sous réserve RGPD (notes 9.1,
+      antécédents 9.3). L'infra lib/security/crypto est générique et couvrira ces champs dans une story
+      de durcissement ultérieure. Résiduels documentés (ADR §6, story Dev Notes, ops).
+
+quality_score_notes: >-
+  88 (−7 réserve RGPD-PROD-1104 organisationnelle/produit ; −5 CRYPTO-KEY-MGMT limite de conception
+  assumée — clé env sans rotation + passe-plat silencieux sans clé). Aucun défaut de code bloquant ;
+  chiffrement authentifié correctement implémenté (GCM + tag), rétro-compatibilité sûre.
+
+evidence:
+  tests_reviewed: 21
+  tests_status: "21/21 verts sur le périmètre 11.4 (unit 11, integration 10)"
+  full_baseline: "87 fichiers / 773 tests (baseline 11.3 = 83/752 + 4 fichiers / 21 tests 11.4) ; suite entièrement verte"
+  risk_summary: >-
+    Risque technique faible : couche additive, transparente côté UI, sans changement de schéma ni
+    migration. Rétro-compatibilité éprouvée (legacy en clair lisible). Le principal risque est
+    opérationnel (gestion/oubli de clé, CRYPTO-KEY-MGMT) et de conformité/produit (RGPD-PROD-1104),
+    tous deux portés hors code et documentés (ADR §6 + livrable ops + ROADMAP).
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7]
+    ac_gaps: []
+    notes: >-
+      AC1 (API module + format enveloppe) par UNIT-001/008 + inspection source. AC2 (clé/rétro-compat)
+      par UNIT-001..011 : round-trip, IV unique (2 chiffrés ≠), chaînes limites (vide/accents/multi-
+      lignes/longue/emoji), legacy passe-plat même clé activée, altération ciphertext → throw, mauvaise
+      clé → throw, enveloppe malformée → throw, sans clé → passe-plat (encrypt) + throw sur enveloppe
+      (decrypt), longueur de clé invalide → désactivé. AC3 (notes 9.1) par INT-001..004 (create/update
+      chiffrent avant Prisma ; getX déchiffre ; legacy toléré). AC4 (antécédents 9.3) par INT-010..013.
+      AC5 (export lisible) par INT-020 (content déchiffré dans le JSON, aucune enveloppe enc: ne fuit) +
+      INT-021 (legacy en clair). AC6 (aucun changement de schéma + env + ops) validé : prisma/schema.prisma
+      inchangé, .env.example (DATA_ENCRYPTION_KEY), docs/ops/11.4. AC7 (réserve + ROADMAP) présent.
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >-
+      AES-256-GCM (chiffrement AUTHENTIFIÉ : confidentialité + intégrité) ; IV aléatoire unique par
+      valeur ; tag vérifié au déchiffrement (altération/mauvaise clé → throw, jamais de contenu corrompu
+      silencieux ; UNIT-005/006). Clé jamais loggée. requireUser() + assertValidUuid() des Server
+      Actions inchangés (couche additive). Donnée chiffrée sans clé → throw (jamais renvoyée brute,
+      UNIT-011). Réserve CRYPTO-KEY-MGMT (clé env, passe-plat silencieux sans clé) portée hors code.
+  performance:
+    status: PASS
+    notes: >-
+      Une opération de chiffrement/déchiffrement par champ par écriture/lecture (coût négligeable vs
+      l'I/O Prisma). Aucun appel réseau ajouté. Pas de cache de clé (relecture process.env triviale).
+  reliability:
+    status: PASS
+    notes: >-
+      Rétro-compatibilité sûre : legacy en clair lisible (pas de big-bang) ; adoption progressive
+      (chiffrement à la prochaine écriture / backfill idempotent ops). decryptField lève sur donnée
+      illisible (pas de corruption silencieuse). Suites existantes 9.1/9.3/11.2 vertes SANS modification
+      (passe-plat sans clé en test).
+  maintainability:
+    status: PASS
+    notes: >-
+      Module d'infra fin et mockable (calqué sur lib/storage/medical-documents, lib/server/audit),
+      format versionné (rotation future possible). Aucun changement de schéma. Frontière claire
+      (chiffrer avant create/update, déchiffrer dans le mapper). ADR §6 + livrable ops documentent
+      les décisions et l'activation.
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Garde-fou de démarrage : refuser de booter en production si DATA_ENCRYPTION_KEY est absente (éviter le passe-plat silencieux en prod) — atténue CRYPTO-KEY-MGMT."
+      refs: ["lib/security/crypto.ts", "docs/ops/11.4-chiffrement-applicatif.md"]
+    - action: "Rotation de clé (enc:v1: → enc:v2:) + intégration KMS/HSM ; ré-enveloppe par lot."
+      refs: ["lib/security/crypto.ts", "docs/architecture/6-chiffrement-applicatif-decision.md"]
+    - action: "Étendre le périmètre chiffré (Patient.notes, Appointment.*, binaire des documents) dans une story de durcissement — CRYPTO-SCOPE-RESIDUAL."
+      refs: ["prisma/schema.prisma", "lib/storage/medical-documents.ts"]
+    - action: "Exécuter le backfill idempotent des lignes en clair existantes après pose de la clé en prod (étape ops)."
+      refs: ["docs/ops/11.4-chiffrement-applicatif.md"]
