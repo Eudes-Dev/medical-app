@@ -18,6 +18,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./"),
+      // `server-only` est fourni par le runtime Next.js (absent de node_modules).
+      // On le neutralise en test pour pouvoir importer les modules d'accès
+      // `server-only` (ex. app/dashboard/analytics/analytics-data.ts). Story 10.1.
+      "server-only": path.resolve(__dirname, "./tests/stubs/server-only.ts"),
     },
   },
 });

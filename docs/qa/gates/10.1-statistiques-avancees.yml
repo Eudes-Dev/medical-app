@@ -1,0 +1,111 @@
+# Quality Gate — Story 10.1 : Statistiques avancées du cabinet
+# Généré par Quinn (Test Architect) via *review.
+schema: 1
+story: "10.1"
+story_title: "Statistiques avancées du cabinet (tableau de bord analytique)"
+gate: PASS
+status_reason: >-
+  8/8 AC couverts, aucun gap. Logique d'agrégation PURE isolée dans lib/analytics/stats.ts
+  (aucun import Prisma/server-only/React → testable sans base) : StatsPeriod/STATS_PERIODS,
+  resolvePeriodRange (fenêtre courante + précédente contiguës sans chevauchement ; jours
+  calendaires 7d/30d/90d, mois calendaires 12m) et aggregateStatistics (CA = somme price des
+  COMPLETED, null → 0 ; total + byStatus ; nouveaux patients ; taux d'annulation à 1 décimale ;
+  tendances pctTrend reprise d'overview-data.ts ; byServiceType hors CANCELLED, tri décroissant).
+  Couche d'accès server-only analytics-data.ts : requireUser() en tête, 2 requêtes sur la fenêtre
+  [prevStart, end], conversion Decimal→number, délégation INTÉGRALE à la logique pure (aucun calcul
+  dupliqué). Page réelle force-dynamic remplace le placeholder : validation searchParams.period
+  (défaut 30d), 4 KPI + tendances, répartition par statut, top 5 par soin, CA formaté Intl FR/EUR ;
+  sélecteur de période composant client (?period= via router.replace, calcul serveur). AUCUN
+  changement de schéma ni migration (lecture seule sur Appointment/ServiceType.price/Patient).
+  Tests 14/14 verts sur le périmètre (10 UNIT + 4 INT) ; suite complète 89 fichiers / 787 tests
+  (+2 fichiers / +14 vs 11.4, 0 régression). Lint propre sur les 6 fichiers 10.1, tsc sans
+  nouvelle erreur (12 baseline inchangées), build OK (route ƒ /dashboard/analytics).
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-26T12:00:00Z"
+
+waiver:
+  active: false
+
+quality_score: 90
+
+top_issues:
+  - id: STATS-NOSHOW-PROXY
+    severity: low
+    finding: >-
+      Le schéma ne distingue pas un statut NO_SHOW dédié ; le taux affiché « annulation / no-show »
+      est calculé à partir des RDV CANCELLED (proxy).
+    status: accepted_by_design
+    mitigation: >-
+      Choix cohérent avec overview-data.ts (KPI « No-shows 30j » déjà basé sur CANCELLED). Documenté
+      dans la story (Dev Notes) et étiqueté explicitement « Taux d'annulation / no-show » côté UI. Un
+      vrai suivi no-show distinct relèverait d'une évolution de schéma (story ultérieure).
+  - id: STATS-REVENUE-LEGACY
+    severity: low
+    finding: >-
+      Le CA n'agrège que les RDV COMPLETED rattachés à un ServiceType tarifé ; les RDV legacy sans
+      serviceTypeId (ou soin sans price) contribuent 0.
+    status: accepted_by_design
+    mitigation: >-
+      Il n'existe pas de prix historisé sur Appointment (seul ServiceType.price porte le tarif) :
+      compter 0 est correct et non une régression. Documenté en Dev Notes ; couvert par 10.1-UNIT-005
+      (price null → 0).
+  - id: STATS-12M-SCAN
+    severity: low
+    finding: >-
+      La période 12m charge jusqu'à ~24 mois de RDV (courant + précédent pour la tendance) en mémoire.
+    status: accepted_by_design
+    mitigation: >-
+      Volume single-tenant maîtrisé, requête indexée sur Appointment.startTime (@@index), agrégation
+      en mémoire identique au patron overview-data.ts. À surveiller si passage multi-praticien (18.x).
+
+# Hors périmètre (assumé) : export CSV/Excel des données (story 10.2) ; graphes temporels
+# avancés / comparaisons multi-périodes custom (durcissement futur) ; E2E Playwright (infra
+# indisponible, cf. 3.6 / 5.2).
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >-
+      requireUser() en tête de getCabinetStatistics (défense en profondeur) + middleware /dashboard/*
+      (1ʳᵉ ligne). Aucune donnée patient nominative exposée (agrégats + libellés de soins). Lecture
+      seule, aucune écriture.
+  performance:
+    status: PASS
+    notes: >-
+      2 requêtes Prisma (RDV + patients) à select minimal, agrégation en mémoire ; index startTime.
+      Page force-dynamic (attendu pour une page authentifiée par cookies).
+  reliability:
+    status: PASS
+    notes: >-
+      Pas de division par zéro (rate1dp/pctTrend gardés ; total=0 → 0). Conversion Decimal→number
+      explicite. Résultat sérialisable (dates ISO). Couvert par 10.1-UNIT-010 (fenêtres vides).
+  maintainability:
+    status: PASS
+    notes: >-
+      Séparation nette logique pure (sans I/O, 10 tests directs) vs couche d'accès (server-only, 4
+      tests intégration). Réutilise pctTrend/format EUR existants, primitives Shadcn (ADR §4). Alias
+      de test server-only additif et documenté.
+
+trace:
+  ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+  ac_gaps: []
+  tests:
+    - "10.1-UNIT-001..003 : resolvePeriodRange (30d/12m/7d/90d, bornes contiguës sans chevauchement)"
+    - "10.1-UNIT-004 : isStatsPeriod / parseStatsPeriod (défaut 30d)"
+    - "10.1-UNIT-005 : CA = somme price des COMPLETED, null → 0, tendance"
+    - "10.1-UNIT-006 : total + byStatus + tendance"
+    - "10.1-UNIT-007 : nouveaux patients par fenêtre"
+    - "10.1-UNIT-008 : taux d'annulation 1 décimale + trendPoints"
+    - "10.1-UNIT-009 : byServiceType exclut CANCELLED, tri décroissant"
+    - "10.1-UNIT-010 : fenêtres vides → zéros sans division par zéro"
+    - "10.1-INT-001 : garde requireUser"
+    - "10.1-INT-002 : fenêtre [prevStart, end] + select (serviceType.price)"
+    - "10.1-INT-003 : conversion Decimal price → CA"
+    - "10.1-INT-004 : agrégation patients + statuts bout-en-bout"
+
+recommendations:
+  immediate: []
+  future:
+    - "Story 10.2 : export CSV/Excel des mêmes agrégats (téléchargement)."
+    - "Évolution possible : statut NO_SHOW distinct au schéma pour séparer annulation et no-show réel."
+    - "Graphes temporels (séries journalières) et comparaisons de périodes personnalisées."
