@@ -27,9 +27,11 @@ import { assertValidUuid } from "@/lib/validations/uuid";
 import {
   consentInputSchema,
   CONSENT_POLICY_VERSION,
+  CONSENT_TYPE_LABELS,
   type ConsentInput,
   type ConsentType,
 } from "@/lib/validations/consent";
+import { recordAuditEvent } from "@/lib/server/audit";
 
 /**
  * Représentation d'un consentement RGPD pour l'affichage.
@@ -124,7 +126,7 @@ export async function setConsentStatus(
   | { success: false; error: string }
 > {
   try {
-    await requireUser();
+    const user = await requireUser();
     assertValidUuid(patientId);
 
     const parsed = consentInputSchema.safeParse(input);
@@ -168,6 +170,17 @@ export async function setConsentStatus(
           },
     });
 
+    // Journal d'audit (11.3) — best-effort, ne bloque jamais le succès.
+    await recordAuditEvent({
+      action: granted ? "CONSENT_GRANTED" : "CONSENT_REVOKED",
+      actorId: user.id,
+      actorEmail: user.email,
+      patientId,
+      summary: `${granted ? "Consentement accordé" : "Consentement retiré"} — ${
+        CONSENT_TYPE_LABELS[type]
+      }.`,
+    });
+
     revalidatePath(`/dashboard/patients/${patientId}`);
 
     return { success: true, record: toConsentRecordData(record) };
@@ -198,11 +211,22 @@ export async function deleteConsentRecord(
   recordId: string
 ): Promise<{ success: true } | { success: false; error: string }> {
   try {
-    await requireUser();
+    const user = await requireUser();
     assertValidUuid(recordId);
 
     const record = await prisma.consentRecord.delete({
       where: { id: recordId },
+    });
+
+    // Journal d'audit (11.3) — best-effort, ne bloque jamais le succès.
+    await recordAuditEvent({
+      action: "CONSENT_RESET",
+      actorId: user.id,
+      actorEmail: user.email,
+      patientId: record.patientId,
+      summary: `Consentement réinitialisé — ${
+        CONSENT_TYPE_LABELS[record.type as ConsentType]
+      }.`,
     });
 
     revalidatePath(`/dashboard/patients/${record.patientId}`);

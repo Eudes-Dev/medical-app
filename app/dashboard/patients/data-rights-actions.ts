@@ -36,6 +36,8 @@ import {
   buildPatientExport,
   buildPatientExportFileName,
 } from "@/lib/rgpd/patient-export";
+import { recordAuditEvent } from "@/lib/server/audit";
+import { formatPatientLabel } from "@/lib/rgpd/audit";
 
 /**
  * Exporte l'intégralité des données d'un patient au format JSON structuré
@@ -50,7 +52,7 @@ export async function exportPatientData(
   | { success: false; error: string }
 > {
   try {
-    await requireUser();
+    const user = await requireUser();
     assertValidUuid(patientId);
 
     const patient = await prisma.patient.findUnique({
@@ -130,6 +132,16 @@ export async function exportPatientData(
       })),
     });
 
+    // Journal d'audit (11.3) — best-effort, ne bloque jamais le succès.
+    await recordAuditEvent({
+      action: "PATIENT_EXPORT",
+      actorId: user.id,
+      actorEmail: user.email,
+      patientId: patient.id,
+      patientLabel: formatPatientLabel(patient),
+      summary: "Export des données du patient (portabilité, art. 20).",
+    });
+
     return {
       success: true,
       fileName: buildPatientExportFileName({
@@ -171,8 +183,16 @@ export async function erasePatientData(
   | { success: false; error: string }
 > {
   try {
-    await requireUser();
+    const user = await requireUser();
     assertValidUuid(patientId);
+
+    // 0. Snapshot du nom du patient AVANT suppression (pour le journal d'audit :
+    //    une fois supprimé, son identité n'est plus récupérable). `null` si le
+    //    patient n'existe pas → `patient.delete` lèvera ensuite l'erreur attendue.
+    const patientForLabel = await prisma.patient.findUnique({
+      where: { id: patientId },
+      select: { firstName: true, lastName: true },
+    });
 
     // 1. Récupère les chemins de stockage des documents du patient.
     const documents = await prisma.medicalDocument.findMany({
@@ -196,6 +216,19 @@ export async function erasePatientData(
     // 3. Supprime le patient → cascade FK sur RDV, notes, documents, antécédents,
     //    consentements, entrées de liste d'attente.
     await prisma.patient.delete({ where: { id: patientId } });
+
+    // 4. Journal d'audit (11.3) — best-effort, APRÈS la suppression réussie.
+    //    `patientLabel` est le snapshot figé à l'étape 0 (le patient n'existe plus).
+    await recordAuditEvent({
+      action: "PATIENT_ERASURE",
+      actorId: user.id,
+      actorEmail: user.email,
+      patientId,
+      patientLabel: patientForLabel
+        ? formatPatientLabel(patientForLabel)
+        : null,
+      summary: `Effacement définitif du patient (droit à l'oubli, art. 17) — ${paths.length} document(s) purgé(s).`,
+    });
 
     revalidatePath("/dashboard/patients");
 

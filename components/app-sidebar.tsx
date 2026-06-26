@@ -22,6 +22,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   Settings,
+  ShieldCheck,
   Stethoscope,
   Users,
   Video,
@@ -93,6 +94,11 @@ const data = {
     },
   ],
   navSecondary: [
+    {
+      title: "Journal d'audit",
+      url: "/dashboard/audit",
+      icon: ShieldCheck,
+    },
     {
       title: "Paramètres",
       url: "/dashboard/settings",

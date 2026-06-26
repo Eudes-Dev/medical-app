@@ -1,0 +1,131 @@
+# Quality Gate — Story 11.3 : Journal d'audit RGPD (piste d'audit append-only)
+# Généré par Quinn (Test Architect) via *review.
+schema: 1
+story: "11.3"
+story_title: "Journal d'audit RGPD (piste d'audit append-only)"
+gate: PASS
+status_reason: >-
+  8/8 AC couverts. Modèle AuditLog append-only avec lien patient DÉNORMALISÉ (patientId String? SANS
+  FK ni cascade) + snapshot patientLabel → l'entrée d'audit survit à l'effacement du patient (vérifié
+  INT-013 : label capturé via findUnique AVANT patient.delete). Recorder recordAuditEvent best-effort
+  qui ne lève jamais (INT-003) → ne bloque jamais l'action métier tracée. Instrumentation des actions
+  export/effacement (11.2) et accord/retrait/réinitialisation de consentement (11.1) sans changement
+  de signatures. Lecture getAuditLogEntries sécurisée (requireUser + assertValidUuid avant Prisma,
+  tri desc, take borné 200/500). Page lecture seule /dashboard/audit (force-dynamic) + entrée de nav.
+  AUCUNE migration destructive (CREATE TYPE + CREATE TABLE sans FK + 2 index). Suite verte 83 fichiers
+  / 752 tests (+5 fichiers / +23 vs 11.2, 0 régression — les tests 11.1/11.2 restent verts sans
+  modification). Lint propre, tsc sans nouvelle erreur (11 baseline inchangées), build OK.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-26T06:30:00Z"
+
+waiver:
+  active: false
+
+quality_score: 87
+
+top_issues:
+  - id: RGPD-PROD-1103
+    severity: medium
+    finding: >-
+      11.3 livre la piste d'audit append-only (export art. 20, effacement art. 17, changements de
+      consentement) mais ne lève PAS seule la réserve de mise en production du dossier patient : le
+      chiffrement applicatif (11.4) n'est pas livré.
+    status: accepted_by_design
+    mitigation: >-
+      Mise en PRODUCTION de tout le dossier patient reste conditionnée à un arbitrage PO/RGPD couvrant
+      l'ensemble de l'épopée 11. Réserve documentée dans la story (Dev Notes) et le ROADMAP, cohérente
+      avec 9.x / 11.1 / 11.2.
+  - id: AUDIT-BESTEFFORT-TX
+    severity: medium
+    finding: >-
+      recordAuditEvent est best-effort (avale toute erreur Prisma) et l'écriture d'audit n'est pas
+      transactionnelle avec l'action tracée : une panne d'audit lors d'un effacement réussi laisse
+      l'opération sans trace, et la piste n'est pas cryptographiquement inviolable (append-only au
+      niveau applicatif seulement, pas de protection contre un accès SQL direct).
+    status: accepted_by_design
+    mitigation: >-
+      Choix assumé et documenté (même philosophie best-effort que la purge Storage de 11.2) pour ne
+      jamais rendre une opération impossible à cause d'une dépendance annexe. Le durcissement (audit
+      transactionnel, inviolabilité, rétention/WORM) relève d'une story de durcissement ultérieure.
+  - id: AUDIT-ACTOR-PII
+    severity: low
+    finding: >-
+      actorEmail (email du praticien) est stocké en clair dans audit_logs. En single-tenant il s'agit
+      de l'email du responsable de traitement lui-même, pertinent pour une piste d'audit.
+    status: accepted_by_design
+    mitigation: >-
+      Donnée minimale et légitime pour l'auditabilité (qui a agi). À revoir si l'app devient
+      multi-praticien (18.x) avec des exigences de minimisation accrues.
+
+quality_score_notes: >-
+  87 (−10 réserve RGPD-PROD-1103 organisationnelle/produit ; −3 pour AUDIT-BESTEFFORT-TX, limite de
+  conception assumée d'une piste d'audit best-effort/non inviolable). Aucun défaut de code bloquant.
+
+evidence:
+  tests_reviewed: 23
+  tests_status: "23/23 verts sur le périmètre 11.3 (unit 5, integration 18)"
+  full_baseline: "83 fichiers / 752 tests (baseline 11.2 = 78/729 + 5 fichiers / 23 tests 11.3) ; suite entièrement verte (le flaky historique 2.1-E2E-004 passe également)"
+  risk_summary: >-
+    Risque technique faible : feature additive single-tenant, orthogonale au cœur agenda ; migration
+    NON destructive (ajout enum + table sans FK) ; recorder best-effort qui ne casse jamais les
+    actions tracées (tests 11.1/11.2 verts sans modification) ; lien patient dénormalisé garantissant
+    la survie de l'audit à l'effacement. Risque de conformité (RGPD) porté hors code par
+    RGPD-PROD-1103 (avancement partiel de l'épopée 11) et AUDIT-BESTEFFORT-TX (durcissement futur).
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+    notes: >-
+      AC1 (modèle append-only dénormalisé + migration sans FK) validé au niveau schéma/migration +
+      exercé indirectement par INT-013 (survie à l'effacement). AC2 (module pur) par UNIT-001..005
+      (labels couvrant toutes les actions, danger=effacement, formatPatientLabel trim/fallback,
+      libellés UI). AC3 (recorder best-effort) par INT-001..003 (champs corrects, null par défaut,
+      ne propage jamais l'erreur). AC4 (instrumentation droits RGPD) par INT-010..015 (export →
+      PATIENT_EXPORT ; non-auth/introuvable → pas d'audit ; effacement → label capturé AVANT delete
+      + PATIENT_ERASURE + résumé nombre de docs ; échec delete → pas d'audit). AC5 (instrumentation
+      consentement) par INT-020..023 (GRANTED/REVOKED/RESET ; entrée invalide → pas d'audit). AC6
+      (lecture) par INT-030..034 (non-auth → lève sans Prisma ; tri desc + take 200 ; filtre patient ;
+      UUID invalide → [] sans Prisma ; take borné à 500). AC7 (page + nav) vérifié par inspection
+      (politique 9.x/11.1/11.2) — rendu non unit-testé, données fournies par AC6. AC8 (réserve +
+      ROADMAP) présent.
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >-
+      `requireUser()` en tête de getAuditLogEntries et conservé pour renseigner actorId/actorEmail
+      dans les actions tracées (non-auth → pas d'audit, INT-011). `assertValidUuid()` sur le filtre
+      patientId AVANT Prisma (INT-033 : invalide → [] sans findMany). Prisma paramétré ; page et
+      action réservées au dashboard authentifié (force-dynamic). summary = libellé d'action (pas de
+      contenu de note/document sensible). Append-only applicatif (pas d'update/delete exposé).
+  performance:
+    status: PASS
+    notes: >-
+      Lecture : un findMany indexé (idx created_at / patient_id) trié desc avec take borné (≤ 500).
+      Écriture : un unique create par action tracée, best-effort, hors chemin critique. Aucun appel
+      réseau superflu.
+  reliability:
+    status: PASS
+    notes: >-
+      recordAuditEvent capture toute erreur et ne lève jamais (INT-003) → l'export/effacement/
+      consentement ne sont jamais bloqués par l'audit. Lien patient dénormalisé (sans FK) → l'entrée
+      d'effacement SURVIT à la suppression du patient (label figé avant delete, INT-013). Formes de
+      retour discriminées homogènes avec 9.x/11.x.
+  maintainability:
+    status: PASS
+    notes: >-
+      Séparation nette : module pur lib/rgpd/audit (labels, testable unit) vs couche d'écriture fine
+      mockable lib/server/audit (calquée sur lib/storage/medical-documents) vs action de lecture
+      (calquée sur consent-actions). Harnais de test identique aux stories 9.x/11.x. Instrumentation
+      additive sans changement de signatures (tests existants verts sans modification).
+
+recommendations:
+  immediate: []
+  future:
+    - action: "Durcissement de la piste d'audit (AUDIT-BESTEFFORT-TX) : écriture transactionnelle avec l'action tracée et/ou inviolabilité (append-only au niveau base, WORM, hash chaîné, rétention)."
+      refs: ["lib/server/audit.ts", "docs/stories/ROADMAP.md"]
+    - action: "Épopée 11 : chiffrement applicatif (11.4) — dernière brique avant arbitrage de levée de la réserve RGPD-PROD-1103."
+      refs: ["docs/stories/ROADMAP.md"]
+    - action: "Étendre la couverture d'audit (consultation de documents/notes, accès en lecture au dossier) et offrir un filtre/recherche dans la page /dashboard/audit (pagination au-delà de 500)."
+      refs: ["app/dashboard/audit/actions.ts", "app/dashboard/audit/page.tsx"]
+    - action: "Couverture E2E (Playwright) de la page journal une fois l'infra E2E disponible (cf. 3.6/5.2)."
+      refs: ["tests/e2e/"]

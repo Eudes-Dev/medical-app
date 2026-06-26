@@ -155,6 +155,24 @@ enum ConsentType {
   COMMUNICATION
 }
 
+/// Type d'action consignée dans le journal d'audit RGPD (story 11.3).
+///
+/// Troisième brique de l'épopée 11 « RGPD / Sécurité ». Liste fermée des
+/// opérations sensibles tracées : export (art. 20), effacement (art. 17) et
+/// changements de consentement (11.1).
+enum AuditAction {
+  /// Export des données d'un patient (portabilité — art. 20).
+  PATIENT_EXPORT
+  /// Effacement définitif d'un patient et de ses données (droit à l'oubli — art. 17).
+  PATIENT_ERASURE
+  /// Consentement accordé pour une finalité (11.1).
+  CONSENT_GRANTED
+  /// Consentement retiré pour une finalité (11.1).
+  CONSENT_REVOKED
+  /// Consentement réinitialisé à « non renseigné » (11.1).
+  CONSENT_RESET
+}
+
 // ==============================================
 // MODÈLES
 // ==============================================
@@ -718,4 +736,47 @@ model ConsentRecord {
   /// Index sur patientId pour lister les consentements d'un patient.
   @@index([patientId])
   @@map("consent_records")
+}
+
+/// Journal d'audit RGPD **append-only** (story 11.3).
+///
+/// Troisième brique de l'épopée 11 « RGPD / Sécurité ». Consigne automatiquement
+/// **qui** (acteur) a fait **quoi** (action) et **quand** sur les données
+/// sensibles du patient : export (art. 20), effacement (art. 17), changements de
+/// consentement (11.1). L'application n'écrit (`create`) et ne lit (`findMany`)
+/// que ce modèle — jamais d'update/delete (piste d'audit immuable).
+///
+/// ⚠️ Lien patient **DÉNORMALISÉ** : `patientId` n'a **aucune relation/FK ni
+/// cascade**, et `patientLabel` est un **snapshot** du nom figé au moment de
+/// l'action. Conséquence voulue : une entrée « effacement du patient X » survit
+/// à la suppression du patient (un journal d'effacement qui disparaîtrait avec
+/// le patient n'aurait aucune valeur probante). C'est la différence clé avec
+/// `ConsentRecord`/`MedicalDocument`/etc. qui, eux, partent en cascade FK.
+///
+/// Single-tenant : pas de `tenantId` ; `actorId` est tout de même tracé
+/// (défense en profondeur + futur multi-praticien 18.x).
+model AuditLog {
+  /// Identifiant unique UUID généré automatiquement
+  id           String      @id @default(uuid())
+  /// Action consignée.
+  action       AuditAction
+  /// ID du patient concerné (dénormalisé : AUCUNE FK/cascade → survit à l'effacement).
+  patientId    String?     @map("patient_id")
+  /// Snapshot du libellé patient (nom) au moment de l'action — reste lisible
+  /// même après suppression du patient.
+  patientLabel String?     @map("patient_label")
+  /// Identité de l'acteur (praticien) issue de `requireUser()`.
+  actorId      String      @map("actor_id")
+  /// Email de l'acteur au moment de l'action (optionnel).
+  actorEmail   String?     @map("actor_email")
+  /// Détail FR lisible (libellé d'action — jamais le contenu d'une note/document).
+  summary      String?
+  /// Date de l'événement (sert au tri récent → ancien).
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  /// Index sur patientId pour filtrer le journal d'un patient.
+  @@index([patientId])
+  /// Index sur createdAt pour le tri chronologique du journal.
+  @@index([createdAt])
+  @@map("audit_logs")
 }
