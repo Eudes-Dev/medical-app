@@ -1,0 +1,108 @@
+# Quality Gate — Story 13.2 : Déploiement de production Vercel (configuration reproductible)
+# Généré par Quinn (Test Architect) via *review (boucle /bmad-loop).
+schema: 1
+story: "13.2"
+story_title: "Déploiement de production Vercel (configuration reproductible)"
+gate: PASS
+status_reason: >-
+  7/7 AC couverts. Corrige un défaut de build Vercel bloquant réel : le client Prisma
+  (lib/generated/prisma, gitignoré .gitignore:50, 0 fichier suivi) n'était régénéré par aucun
+  `postinstall` ni par le `build` (next build seul) — un build Vercel propre aurait échoué.
+  Ajout `postinstall: prisma generate` (régénération portable Vercel/CI/local), durcissement
+  vercel.json (regions cdg1 UE/RGPD, framework nextjs, crons 6.2 préservés), module pur testable
+  lib/config/required-env.ts + script aide-ops scripts/check-prod-env.ts (non bloquant build),
+  runbook docs/ops/13.2-deploiement-vercel.md. Aucun déploiement réel, aucune action en base prod,
+  aucun secret committé (OPS-002). Preuve : 6 nouveaux tests unitaires verts, suite complète
+  92 fichiers / 806 tests verte, `prisma generate` OK, `next build` OK localement.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-26T19:25:00Z"
+
+waiver:
+  active: false
+
+quality_score: 95
+
+top_issues:
+  - id: OPS-132
+    severity: low
+    finding: >-
+      L'exécution réelle (vercel link/deploy, pose des variables dans le dashboard Vercel,
+      `prisma migrate deploy` en base prod, smoke-test post-déploiement) n'est pas vérifiable
+      dans la boucle : ce sont des actions ops/humaines irréversibles ou touchant la production.
+    status: open
+    mitigation: >-
+      Conforme au garde-fou OPS-002 (jamais automatisé en boucle). Intégralement documenté et
+      ordonnancé dans docs/ops/13.2-deploiement-vercel.md (étapes marquées 🧑‍🔧). Le risque de
+      build cassé — seul point réellement bloquant — est levé et PROUVÉ localement (`next build`
+      vert après ajout du postinstall).
+  - id: ENV-SCRIPT-132
+    severity: low
+    finding: >-
+      Le script check:prod-env n'est volontairement PAS branché comme porte de `next build` :
+      un environnement prod incomplet n'échoue donc pas automatiquement au build.
+    status: accepted_by_design
+    mitigation: >-
+      Choix assumé : brancher la validation sur le build casserait les previews Vercel légitimes
+      sans secrets. C'est un aide-ops à exécuter à la demande / dans le runbook. La fonction pure
+      validateProductionEnv est, elle, couverte par tests unitaires.
+
+quality_score_notes: >-
+  95 (−5 pour OPS-132 : exécution réelle du déploiement non vérifiable en boucle, bornée par la
+  preuve locale du build et un runbook complet. ENV-SCRIPT-132 accepté par design, sans impact score).
+
+evidence:
+  tests_reviewed: 6
+  tests_status: "6 nouveaux tests unitaires (13.2-UNIT-001..006) verts — fonction pure validateProductionEnv (nominal, manquantes, vides, optionnelles tolérées, garde-fou secrets critiques)"
+  full_baseline: "92 fichiers / 806 tests verts (baseline 91/800 + 6 nouveaux tests ; aucune régression)"
+  lint: "Inchangé : modules ajoutés (required-env.ts, check-prod-env.ts) typés stricts, sans `as any` ; dette baseline TEST-BASELINE-001 inchangée"
+  types: "tsc — modules nouveaux typés (EnvVarSpec/ProductionEnvValidation) ; aucune nouvelle erreur introduite"
+  build: "`npm run build` exécuté localement APRÈS ajout du postinstall : succès (table de routes complète, client Prisma régénéré consommé). `npx prisma generate` (commande postinstall) : ✔ Generated Prisma Client 7.3.0."
+  risk_summary: >-
+    Risque technique faible. La story corrige un bug de build Vercel réel et le prouve localement.
+    Changements minimes et réversibles (1 script npm postinstall, 2 clés vercel.json, 1 module pur,
+    1 script CLI, tests, doc). Aucune migration, aucune dépendance runtime, aucun secret committé,
+    aucune action irréversible. Risque résiduel = exécution ops réelle non observée en boucle (OPS-132).
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7]
+    ac_gaps: []
+    notes: >-
+      AC1 (postinstall) prouvé par `npx prisma generate` OK + `next build` vert consommant le client.
+      AC2 (vercel.json regions cdg1 / framework / crons préservés) vérifié par inspection du fichier.
+      AC3/AC4 (module pur + script) couverts par 6 tests unitaires + inspection. AC5 (runbook) livré
+      et revu (étapes ops marquées, OPS-002 respecté). AC6 (aucune action irréversible / secret) vérifié
+      (diff = config/code/doc uniquement ; .env* gitignoré). AC7 (portes locales) prouvé : suite 92/806
+      verte + build local vert.
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >-
+      Aucun secret committé (.env* gitignoré, inchangé). Le module n'expose que des NOMS de variables,
+      jamais de valeurs. Inventaire des secrets critiques (DATA_ENCRYPTION_KEY, JWT_SECRET, CRON_SECRET)
+      verrouillé par un test garde-fou (13.2-UNIT-002) empêchant qu'ils redeviennent optionnels. Région
+      cdg1 maintient le compute en UE (cohérence RGPD épopée 11). Runbook rappelle migrate deploy = humain.
+  reliability:
+    status: PASS
+    notes: >-
+      Le postinstall rend le build Vercel déterministe (client Prisma toujours présent), supprimant un
+      échec de build latent. Crons 6.2 préservés à l'identique. Script de validation distingue
+      manquantes/vides pour un diagnostic fiable avant déploiement.
+  maintainability:
+    status: PASS
+    notes: >-
+      Module pur, typé, abondamment commenté, aligné sur les patterns existants (lib/analytics/*).
+      Inventaire des env unique, dérivé de .env.example. Runbook ordonnançant clairement les étapes
+      automatiques vs ops/humaines. Aucune duplication.
+  performance:
+    status: PASS
+    notes: "N/A applicatif. postinstall ajoute une génération Prisma déjà nécessaire ; aucun coût runtime."
+
+recommendations:
+  immediate:
+    - action: "OPS : suivre docs/ops/13.2-deploiement-vercel.md (vercel link, poser les variables prod, `prisma migrate deploy` humain, deploy, smoke-test)."
+      refs: ["docs/ops/13.2-deploiement-vercel.md"]
+  future:
+    - action: "Poursuivre l'épopée 13 : 13.3 (monitoring Sentry), 13.4 (backups DB), 13.5 (rate-limiting durci)."
+      refs: ["docs/stories/ROADMAP.md#épopée-13"]
+    - action: "Optionnel : exécuter `npm run check:prod-env` en étape manuelle d'un futur workflow de déploiement (sans le rendre bloquant pour les previews)."
+      refs: ["scripts/check-prod-env.ts"]

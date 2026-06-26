@@ -7,6 +7,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
+    "postinstall": "prisma generate",
+    "check:prod-env": "tsx scripts/check-prod-env.ts",
     "lint": "eslint .",
     "seed:user": "tsx scripts/seed-user.ts",
     "seed:demo": "tsx scripts/seed-demo-data.ts",
