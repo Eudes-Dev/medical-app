@@ -1,0 +1,105 @@
+# Quality Gate — Story 11.1 : Consentement RGPD
+# Généré par Quinn (Test Architect) via *review.
+schema: 1
+story: "11.1"
+story_title: "Consentement RGPD (traçabilité du consentement par finalité du dossier patient)"
+gate: PASS
+status_reason: >-
+  8/8 AC couverts. Modèle ConsentRecord + enum ConsentType + migration non destructive
+  (CREATE TYPE/TABLE + UNIQUE INDEX (patient_id,type) + INDEX + FK Cascade) ; 3 Server Actions
+  sécurisées (requireUser + assertValidUuid + Zod isomorphe enum + note ≤ 500) avec upsert
+  horodaté (grantedAt/revokedAt/policyVersion) ; UI fiche patient par finalité (accorder /
+  retirer + note / réinitialiser confirmé) avec badge de statut explicite. Suite verte
+  (76 fichiers / 710 tests ; +2 fichiers / +19 vs baseline 9.4, 0 régression ; 1 timeout
+  flaky 2.1 non lié, passe 6/6 en isolement). Lint propre, build OK.
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-26T04:20:00Z"
+
+waiver:
+  active: false
+
+quality_score: 90
+
+top_issues:
+  - id: RGPD-PROD-1101
+    severity: medium
+    finding: >-
+      11.1 livre la BRIQUE consentement (état courant par finalité, horodatage, version de
+      politique figée) mais ne lève PAS seule la réserve de mise en production du dossier patient :
+      le chiffrement applicatif (11.4), le journal d'audit des accès/changements de consentement
+      (11.3) et le droit à l'oubli/export (11.2) ne sont pas livrés. Le modèle conserve l'état
+      courant, pas une piste d'audit append-only (relève de 11.3).
+    status: accepted_by_design
+    mitigation: >-
+      Mise en PRODUCTION de tout le dossier patient (notes/documents/antécédents/consentement)
+      reste conditionnée à un arbitrage PO/RGPD couvrant l'ensemble de l'épopée 11. Réserve
+      documentée dans la story (Dev Notes) et le ROADMAP, cohérente avec 9.2/9.3.
+
+quality_score_notes: >-
+  90 (−10 pour la réserve RGPD-PROD-1101, organisationnelle/produit et avancement partiel de
+  l'épopée 11, non un défaut de code).
+
+evidence:
+  tests_reviewed: 19
+  tests_status: "19/19 verts sur le périmètre 11.1 (unit 8, integration 11)"
+  full_baseline: "76 fichiers / 710 tests (baseline 9.4 = 74/691 + 2 fichiers / 19 tests 11.1) ; 1 timeout flaky 2.1-E2E-004 non lié, vérifié 6/6 en isolement"
+  risk_summary: >-
+    Risque technique faible : feature additive single-tenant, orthogonale au cœur agenda ;
+    migration non destructive ; pas de fichier/binaire (données structurées) ; upsert sur clé
+    composite @@unique([patientId, type]). Risque de conformité (RGPD) porté hors code par
+    RGPD-PROD-1101 (avancement partiel de l'épopée 11).
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+    notes: >-
+      AC1/AC7 (modèle, contrainte @@unique, cascade patient, champs Patient inchangés) validés au
+      niveau schéma+migration (non unit-testables sans base, cohérent avec 9.x). AC4/AC5 (UI :
+      badge 3-états par finalité, accorder/retirer + note, réinitialisation confirmée) vérifiés par
+      inspection — le rendu n'est pas unit-testé (politique identique à 9.1/9.2/9.3) mais la logique
+      sous-jacente (upsert horodaté + validation) est couverte : INT-004 (accord ⇒ grantedAt /
+      revokedAt:null / policyVersion), INT-005 (retrait ⇒ revokedAt, grantedAt préservé/omis).
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >-
+      `requireUser()` en tête des 3 actions (testé : non-auth → UnauthorizedError / échec sans
+      Prisma). `assertValidUuid()` sur tout id avant Prisma (testé : UUID invalide → []/échec sans
+      Prisma). Validation Zod isomorphe (type ∈ enum, note trimée ≤ 500 ; rejet sans Prisma testé).
+      Prisma paramétré (upsert sur clé composite) ; aucune surface publique. Section réservée au
+      dashboard authentifié.
+  performance:
+    status: PASS
+    notes: >-
+      Index unique `consent_records(patient_id, type)` + index `(patient_id)`. findMany borné à ≤ 3
+      lignes par patient (une par finalité). Dérivation du badge en O(finalités) côté client.
+      Aucun appel réseau superflu.
+  reliability:
+    status: PASS
+    notes: >-
+      Upsert idempotent garantissant au plus un état courant par couple (patient, finalité).
+      Horodatage cohérent (accord remet revokedAt=null ; retrait conserve grantedAt). Forme de
+      retour discriminée { success } homogène avec 9.x ; erreurs mappées FR sans fuite d'id.
+      Cascade FK : suppression patient purge ses consentements.
+  maintainability:
+    status: PASS
+    notes: >-
+      Patterns du dépôt respectés (actions calquées sur medical-history-actions, harnais de test
+      identique). Validation pure (testable unit, aucun import Prisma/Supabase) ; libellés/finalités
+      réutilisables (CONSENT_TYPE_LABELS / CONSENT_TYPE_DESCRIPTIONS) ; version de politique
+      centralisée (CONSENT_POLICY_VERSION) ; messages via TOAST_MESSAGES.consent ; kit UI partagé
+      patient-record-ui réutilisé ; type d'entrée `z.input` correctement choisi (note optionnelle).
+
+recommendations:
+  immediate:
+    - action: "OPS : appliquer la migration 20260626000015_add_consent_records en base (étape de déploiement standard, non exécutée par la boucle)."
+      refs: ["prisma/migrations/20260626000015_add_consent_records/migration.sql"]
+    - action: "PO/RGPD : intégrer le consentement au même arbitrage d'exposition production que 9.1/9.2/9.3 (RGPD-PROD-1101) ; 11.1 ne lève pas seule la réserve."
+      refs: ["docs/stories/11.1.consentement-rgpd.story.md", "docs/stories/ROADMAP.md"]
+  future:
+    - action: "Épopée 11 : journal d'audit append-only des changements de consentement (11.3), droit à l'oubli/export (11.2), chiffrement applicatif (11.4)."
+      refs: ["docs/stories/ROADMAP.md"]
+    - action: "Lier explicitement le consentement COMMUNICATION à la logique d'envoi des rappels (6.2) si une vérification de consentement préalable à l'envoi est souhaitée (hors périmètre 11.1)."
+      refs: ["docs/stories/6.2.rappels-automatiques.story.md"]
+    - action: "Couverture E2E (Playwright) du parcours consentement une fois l'infra E2E disponible (cf. 3.6/5.2)."
+      refs: ["tests/e2e/"]

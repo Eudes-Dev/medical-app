@@ -142,6 +142,19 @@ enum WaitlistStatus {
   CANCELLED
 }
 
+/// Finalité de traitement couverte par un consentement RGPD (story 11.1).
+///
+/// Première brique de l'épopée 11 « RGPD / Sécurité ». Liste fermée des finalités
+/// pour lesquelles le praticien trace le consentement recueilli auprès du patient.
+enum ConsentType {
+  /// Traitement des données personnelles (gestion du dossier, des RDV).
+  DATA_PROCESSING
+  /// Traitement des données de santé (art. 9 RGPD — consentement explicite).
+  HEALTH_DATA
+  /// Communications et rappels (email/SMS). Coexiste avec l'opt-out 6.2.
+  COMMUNICATION
+}
+
 // ==============================================
 // MODÈLES
 // ==============================================
@@ -234,6 +247,9 @@ model Patient {
 
   /// Antécédents médicaux structurés (story 9.3 ; onDelete Cascade côté MedicalHistoryEntry).
   medicalHistoryEntries MedicalHistoryEntry[]
+
+  /// Consentements RGPD par finalité (story 11.1 ; onDelete Cascade côté ConsentRecord).
+  consentRecords ConsentRecord[]
 
   @@map("patients")
 }
@@ -656,4 +672,50 @@ model MedicalHistoryEntry {
   /// Index sur patientId pour lister les antécédents d'un patient.
   @@index([patientId])
   @@map("medical_history_entries")
+}
+
+/// Consentement RGPD d'un patient pour une finalité de traitement (story 11.1).
+///
+/// Première brique de l'épopée 11 « RGPD / Sécurité ». Trace l'**état courant**
+/// du consentement par finalité (`@@unique([patientId, type])` → au plus une ligne
+/// par couple patient/finalité), horodaté et versionné. Distinct des surfaces du
+/// dossier patient (notes 9.1, documents 9.2, antécédents 9.3) : ce n'est pas un
+/// historique libre mais un état booléen accordé/retiré.
+///
+/// ⚠️ Le **journal d'audit immuable** des changements de consentement relève de
+/// l'épopée 11.3 (non livrée) ; ce modèle ne conserve que l'état courant + les
+/// horodatages du dernier accord/retrait.
+///
+/// Single-tenant : pas de `userId`/`tenantId`.
+model ConsentRecord {
+  /// Identifiant unique UUID généré automatiquement
+  id            String      @id @default(uuid())
+  /// ID du patient concerné (clé étrangère). onDelete Cascade : un patient
+  /// supprimé purge ses consentements (cohérent avec les autres surfaces patient).
+  patientId     String      @map("patient_id")
+  /// Finalité de traitement couverte.
+  type          ConsentType
+  /// État courant : true = consentement accordé, false = retiré/non accordé.
+  granted       Boolean     @default(false)
+  /// Date du dernier accord (null si jamais accordé). Conservée même après retrait.
+  grantedAt     DateTime?   @map("granted_at")
+  /// Date du dernier retrait (null tant qu'aucun retrait).
+  revokedAt     DateTime?   @map("revoked_at")
+  /// Version de la politique de confidentialité consentie (figée à l'accord).
+  policyVersion String      @map("policy_version")
+  /// Note de contexte optionnelle (ex. « consentement papier signé le … »).
+  note          String?
+  /// Date de création de la ligne
+  createdAt     DateTime    @default(now()) @map("created_at")
+  /// Date de dernière modification
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  /// Patient concerné (onDelete Cascade).
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  /// Un seul état courant par couple (patient, finalité).
+  @@unique([patientId, type])
+  /// Index sur patientId pour lister les consentements d'un patient.
+  @@index([patientId])
+  @@map("consent_records")
 }

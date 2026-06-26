@@ -31,10 +31,12 @@ import { PatientDetailClient } from "@/components/patients/patient-detail";
 import { ConsultationNotes } from "@/components/patients/consultation-notes";
 import { MedicalDocuments } from "@/components/patients/medical-documents";
 import { MedicalHistory } from "@/components/patients/medical-history";
+import { ConsentSection } from "@/components/patients/consent-section";
 import { getPatientById } from "@/app/dashboard/patients/actions";
 import { getConsultationNotes } from "@/app/dashboard/patients/consultation-note-actions";
 import { getMedicalDocuments } from "@/app/dashboard/patients/medical-document-actions";
 import { getMedicalHistoryEntries } from "@/app/dashboard/patients/medical-history-actions";
+import { getConsentRecords } from "@/app/dashboard/patients/consent-actions";
 
 type PatientDetailPageProps = {
   /**
@@ -65,6 +67,9 @@ export default async function PatientDetailPage(
 
   // Story 9.3 — antécédents médicaux structurés du patient.
   const medicalHistoryEntries = await getMedicalHistoryEntries(id);
+
+  // Story 11.1 — consentements RGPD par finalité du patient.
+  const consentRecords = await getConsentRecords(id);
 
   return (
     <SidebarProvider>
@@ -108,6 +113,10 @@ export default async function PatientDetailPage(
           </div>
           <div className="w-full max-w-5xl">
             <MedicalDocuments patientId={id} documents={medicalDocuments} />
+          </div>
+          {/* Story 11.1 — consentement RGPD (traçabilité par finalité). */}
+          <div className="w-full max-w-5xl">
+            <ConsentSection patientId={id} records={consentRecords} />
           </div>
         </main>
       </SidebarInset>

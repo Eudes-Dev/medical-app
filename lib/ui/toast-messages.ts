@@ -69,6 +69,12 @@ export const TOAST_MESSAGES = {
     updated: "Antécédent mis à jour.",
     deleted: "Antécédent supprimé.",
   },
+  // Story 11.1 — consentement RGPD (traçabilité par finalité du dossier patient).
+  consent: {
+    granted: "Consentement enregistré.",
+    revoked: "Consentement retiré.",
+    reset: "Consentement réinitialisé.",
+  },
   // Story 8.5 — liste d'attente. Les comptes dynamiques (« 2 patients en attente
   // pour ce créneau ») sont composés côté composant (pas de clé par valeur).
   waitlist: {
