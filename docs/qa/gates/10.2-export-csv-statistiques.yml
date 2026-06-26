@@ -1,0 +1,114 @@
+# Quality Gate — Story 10.2 : Export CSV des statistiques du cabinet
+# Généré par Quinn (Test Architect) via *review.
+schema: 1
+story: "10.2"
+story_title: "Export CSV des statistiques du cabinet"
+gate: PASS
+status_reason: >-
+  9/9 AC couverts, aucun gap. Génération CSV PURE isolée dans lib/analytics/stats-csv.ts
+  (aucun import Prisma/server-only/React → testable sans base) : escapeCsvField (RFC 4180 — ;, ",
+  \n, \r ; guillemets doublés), formatAmountFr (2 décimales, virgule FR, sans €/milliers),
+  buildStatisticsCsv (BOM UTF-8 + en-tête Section;Libellé;Valeur;Tendance + Période + 4 KPI + 4
+  statuts ordonnés + liste COMPLÈTE des soins ; CRLF ; séparateur ;), buildStatisticsCsvFileName
+  (slug ASCII daté anti-traversal). Server Action export-actions.ts ("use server") :
+  exportCabinetStatisticsCsv → requireUser() en tête, parseStatsPeriod normalise l'entrée client,
+  délégation INTÉGRALE à getCabinetStatistics (10.1 — aucune requête Prisma ni calcul dupliqué),
+  retour discriminé { success, fileName, csv } | { success, error } (UnauthorizedError → message FR).
+  Bouton client analytics-export-button.tsx ("use client") : Blob text/csv;charset=utf-8 + ancre
+  download + revokeObjectURL (même patron que data-rights-section.tsx/11.2), showError sur échec,
+  état isExporting (bouton désactivé + spinner) ; Button Shadcn outline + icône Download (ADR §4,
+  aucune nouvelle dépendance). Page : bouton ajouté à l'en-tête près du sélecteur, calcul serveur
+  inchangé. AUCUN changement de schéma / migration / dépendance (sérialisation en mémoire d'un objet
+  déjà produit par 10.1). Tests 13/13 verts sur le périmètre (9 UNIT + 4 INT) ; suite complète 91
+  fichiers / 800 tests (+2 fichiers / +13 vs 10.1, 0 régression). Lint propre sur les 6 fichiers,
+  tsc sans nouvelle erreur (11 baseline inchangées), build OK (route ƒ /dashboard/analytics).
+reviewer: "Quinn (Test Architect)"
+updated: "2026-06-26T17:00:00Z"
+
+waiver:
+  active: false
+
+quality_score: 95
+
+top_issues:
+  - id: CSV-RATE-2DP
+    severity: low
+    finding: >-
+      Le taux d'annulation (déjà arrondi à 1 décimale en 10.1) est écrit via formatAmountFr (2
+      décimales), produisant un second chiffre décimal toujours nul (ex. « 10,00 »).
+    status: accepted_by_design
+    mitigation: >-
+      Cohérence de formatage avec les montants ; aucune perte d'information (la valeur source reste
+      à 1 décimale). La colonne d'en-tête porte l'unité « (%) ». Non bloquant.
+  - id: CSV-XLSX-OUT
+    severity: low
+    finding: >-
+      Pas d'export .xlsx natif : le format livré est un CSV (; + BOM UTF-8).
+    status: accepted_by_design
+    mitigation: >-
+      Excel (FR) ouvre nativement un CSV ;+BOM avec accents et colonnes correctes, sans assistant.
+      Un .xlsx exigerait une dépendance tierce (exceljs) contraire à l'ADR §4 (« pas de nouvelle
+      dépendance »). Documenté en Dev Notes.
+  - id: CSV-RESIDUALS-10.1
+    severity: low
+    finding: >-
+      Le CSV reflète fidèlement les agrégats 10.1, dont les résiduels assumés (no-show = proxy
+      annulation ; RDV legacy sans soin tarifé → CA 0).
+    status: accepted_by_design
+    mitigation: >-
+      Hérités de 10.1 (gate PASS) ; 10.2 ne fait que sérialiser ces agrégats, n'introduit aucune
+      nouvelle limite.
+
+# Hors périmètre (assumé) : export .xlsx natif ; dump ligne-à-ligne des RDV individuels ; envoi
+# programmé du rapport par e-mail ; E2E Playwright (infra indisponible, cf. 3.6 / 5.2).
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: >-
+      requireUser() en tête de la Server Action (défense en profondeur) + middleware /dashboard/*
+      (1ʳᵉ ligne). period (entrée client) normalisée par parseStatsPeriod (pas de fenêtre arbitraire).
+      Nom de fichier = slug ASCII dérivé (anti-traversal). Aucune PII patient nominative exportée
+      (agrégats + libellés de soins). Pas d'audit (agrégats anonymes, hors périmètre patient-centré
+      11.3) — choix documenté, évite une migration inutile.
+  performance:
+    status: PASS
+    notes: >-
+      Sérialisation O(n) sur byServiceType d'un objet déjà calculé par 10.1 ; aucune requête
+      supplémentaire propre à 10.2 (réutilise getCabinetStatistics). Téléchargement client (Blob).
+  reliability:
+    status: PASS
+    notes: >-
+      Échappement RFC 4180 couvert (CSV-UNIT-007 : ; " et saut de ligne dans un libellé de soin).
+      Cas byServiceType vide géré (UNIT-008). Retour discriminé + branche d'erreur testée
+      (INT-004 : requireUser rejette → erreur FR, agrégation non appelée). BOM + CRLF vérifiés.
+  maintainability:
+    status: PASS
+    notes: >-
+      Séparation nette : logique CSV pure (sans I/O, 9 tests directs) vs Server Action (4 tests
+      intégration mockant auth + couche d'accès). Réutilise le patron export 11.2 et l'agrégation
+      10.1 (zéro duplication). Primitives Shadcn (ADR §4).
+
+trace:
+  ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+  ac_gaps: []
+  tests:
+    - "10.2-UNIT-001 : escapeCsvField (RFC 4180 — ;, \", \\n ; guillemets doublés ; number brut)"
+    - "10.2-UNIT-002 : formatAmountFr (2 décimales, virgule FR, sans symbole/milliers)"
+    - "10.2-UNIT-003 : BOM en tête + en-tête + CRLF présents"
+    - "10.2-UNIT-004 : Période (dates FR) + Synthèse (montants FR + tendances)"
+    - "10.2-UNIT-005 : une ligne par statut dans l'ordre PENDING/CONFIRMED/COMPLETED/CANCELLED"
+    - "10.2-UNIT-006 : liste complète des soins (8 lignes, pas de troncature top 5)"
+    - "10.2-UNIT-007 : échappement d'un libellé de soin avec ; \" et saut de ligne"
+    - "10.2-UNIT-008 : byServiceType vide → aucune ligne soin, sections conservées"
+    - "10.2-UNIT-009 : buildStatisticsCsvFileName slug ASCII daté, sans traversal"
+    - "10.2-INT-001 : garde requireUser"
+    - "10.2-INT-002 : délégation à getCabinetStatistics avec period normalisée (bogus → 30d)"
+    - "10.2-INT-003 : retour { success, fileName, csv } cohérent (BOM, lignes attendues)"
+    - "10.2-INT-004 : requireUser rejette → erreur FR, getCabinetStatistics non appelée"
+
+recommendations:
+  immediate: []
+  future:
+    - "Export .xlsx natif si un besoin de mise en forme apparaît (coût : dépendance exceljs)."
+    - "Option d'export ligne-à-ligne des RDV (dump transactionnel) si demandé par la comptabilité."

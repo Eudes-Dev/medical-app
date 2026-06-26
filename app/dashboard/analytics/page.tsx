@@ -48,6 +48,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { AnalyticsPeriodSelector } from "@/components/dashboard/analytics-period-selector";
+import { AnalyticsExportButton } from "@/components/dashboard/analytics-export-button";
 import { getCabinetStatistics } from "@/app/dashboard/analytics/analytics-data";
 import {
   parseStatsPeriod,
@@ -199,7 +200,10 @@ export default async function AnalyticsPage({
                   </p>
                 </div>
               </div>
-              <AnalyticsPeriodSelector current={period} />
+              <div className="flex items-center gap-2">
+                <AnalyticsPeriodSelector current={period} />
+                <AnalyticsExportButton period={period} />
+              </div>
             </div>
 
             {/* KPI principaux */}
