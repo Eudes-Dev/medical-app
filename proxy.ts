@@ -1,17 +1,18 @@
 /**
- * Middleware Next.js pour la protection des routes
+ * Proxy Next.js pour la protection des routes (ex-`middleware.ts`, renommé en
+ * `proxy` suivant la convention Next.js 16).
  *
- * Ce middleware intercepte toutes les requêtes vers /dashboard/*
+ * Ce proxy intercepte toutes les requêtes vers /dashboard/*
  * et vérifie que l'utilisateur est authentifié via Supabase Auth.
  *
- * @module middleware
+ * @module proxy
  */
 
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
 /**
- * Middleware de protection des routes.
+ * Proxy de protection des routes.
  *
  * Comportement:
  * 1. Rafraîchit la session Supabase (tokens expirés)
@@ -25,7 +26,7 @@ import { updateSession } from "@/lib/supabase/middleware";
  * @param request - Requête Next.js entrante
  * @returns NextResponse (redirection ou continuation)
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { user, response } = await updateSession(request);
 
   // Si l'utilisateur n'est pas authentifié et tente d'accéder au dashboard
@@ -47,7 +48,7 @@ export async function middleware(request: NextRequest) {
 /**
  * Configuration du matcher.
  *
- * Le middleware s'exécute sur:
+ * Le proxy s'exécute sur:
  * - Toutes les routes /dashboard et sous-routes
  * - La route /login (pour la redirection des utilisateurs connectés)
  *
