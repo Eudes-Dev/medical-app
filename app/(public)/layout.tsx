@@ -20,6 +20,14 @@ import { HeartPulse, Phone } from "lucide-react";
 import { CABINET_DEFAULT_SLUG } from "@/lib/cabinet/config";
 import { getPublicCabinetProfile } from "@/lib/cabinet/public-profile";
 
+/**
+ * Rendu dynamique forcé : le layout lit le profil cabinet en base à chaque
+ * rendu. Sans ce flag, Next.js tente de prérendre statiquement les pages du
+ * groupe (ex. `/unsubscribe`) au build, où la base est injoignable (ENETUNREACH
+ * sur Vercel). Ces surfaces dépendent de données runtime — aucune n'est statique.
+ */
+export const dynamic = "force-dynamic";
+
 export default async function PublicLayout({ children }: { children: ReactNode }) {
   // Identité du cabinet lue depuis le profil persisté (story 7.4).
   const profile = await getPublicCabinetProfile();
