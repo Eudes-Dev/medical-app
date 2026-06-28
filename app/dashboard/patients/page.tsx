@@ -1,10 +1,10 @@
 /**
- * Page de gestion des patients
+ * Page de gestion des patients (refonte UI « Espace Patients »).
  *
- * Affiche une liste interactive de tous les patients avec:
- * - Table de données avec recherche et pagination
- * - Accès à la fiche détaillée de chaque patient
- * - Bouton pour créer un nouveau patient
+ * Affiche l'explorateur de patients :
+ * - Cartes de statistiques animées
+ * - Recherche, bascule vue table / cartes, création de patient
+ * - Table / cartes premium avec pagination serveur
  *
  * Route: /dashboard/patients
  *
@@ -22,22 +22,15 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { PatientsTableWrapper } from "@/components/patients/patients-table-wrapper";
-import { CreatePatientModal } from "@/components/patients/create-patient-modal";
+import { PatientsExplorer } from "@/components/patients/patients-explorer";
 
 /**
  * Page principale de gestion des patients.
- *
- * Cette page affiche:
- * - Un header avec le titre "Gestion des Patients"
- * - Un bouton "Nouveau Patient" (pour la story 2.2)
- * - La table de données des patients (sera implémentée dans les tâches suivantes)
  *
  * @returns JSX de la page de gestion des patients
  */
@@ -45,15 +38,15 @@ export default function PatientsPage() {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
-        {/* Header avec breadcrumb */}
-        <header className="flex h-16 shrink-0 items-center gap-2 px-4">
+      <SidebarInset className="bg-[#f6f8fb]">
+        {/* Header avec breadcrumb (sticky + glassmorphism léger) */}
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-slate-200/70 bg-white/80 px-4 backdrop-blur-md">
           <SidebarTrigger className="-ml-1" />
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
                 <BreadcrumbLink asChild>
-                  <Link href="/dashboard">Dashboard</Link>
+                  <Link href="/dashboard">Tableau de bord</Link>
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator />
@@ -65,31 +58,8 @@ export default function PatientsPage() {
         </header>
 
         {/* Contenu principal */}
-        <div className="flex flex-1 flex-col gap-4 p-4">
-          {/* Header de la page avec titre et bouton */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">
-                Gestion des Patients
-              </h1>
-              <p className="text-muted-foreground">
-                Gérez votre base de patients et accédez à leurs informations.
-              </p>
-            </div>
-            {/* Bouton "Nouveau Patient" qui ouvre le modal de création (Sheet) */}
-            <CreatePatientModal />
-          </div>
-
-          {/* Carte principale contenant la table des patients */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Liste des patients</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {/* Wrapper client pour la table avec recherche et pagination */}
-              <PatientsTableWrapper />
-            </CardContent>
-          </Card>
+        <div className="flex flex-1 flex-col gap-4 p-4 md:p-6 lg:p-8">
+          <PatientsExplorer />
         </div>
       </SidebarInset>
     </SidebarProvider>

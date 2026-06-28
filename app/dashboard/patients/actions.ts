@@ -53,6 +53,22 @@ export type GetPatientsResult = {
 };
 
 /**
+ * Statistiques agrégées affichées en tête de la liste patients (refonte UI).
+ *
+ * Uniquement des `count` Prisma (aucune donnée nominative renvoyée) → RGPD-safe.
+ */
+export type PatientStats = {
+  /** Nombre total de dossiers patients. */
+  total: number;
+  /** Patients créés depuis le 1ᵉʳ du mois courant. */
+  newThisMonth: number;
+  /** Patients ayant au moins un rendez-vous (suivi en cours). */
+  active: number;
+  /** Rendez-vous à venir (PENDING/CONFIRMED, startTime ≥ maintenant). */
+  upcomingAppointments: number;
+};
+
+/**
  * Type représentant un rendez-vous dans l'historique d'un patient.
  */
 export type PatientAppointment = {
@@ -146,6 +162,43 @@ export async function getPatients(
     throw new Error(
       `Failed to fetch patients: ${error instanceof Error ? error.message : "Unknown error"}`
     );
+  }
+}
+
+/**
+ * Récupère des statistiques agrégées pour l'en-tête de la liste patients.
+ *
+ * N'expose aucune donnée nominative (uniquement des compteurs). Tolérant aux
+ * pannes : en cas d'erreur inattendue, renvoie des zéros plutôt que de casser
+ * la page (les stats sont décoratives, non bloquantes).
+ *
+ * @throws {UnauthorizedError} Si l'utilisateur n'est pas authentifié.
+ */
+export async function getPatientStats(): Promise<PatientStats> {
+  try {
+    await requireUser();
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [total, newThisMonth, active, upcomingAppointments] =
+      await Promise.all([
+        prisma.patient.count(),
+        prisma.patient.count({ where: { createdAt: { gte: startOfMonth } } }),
+        prisma.patient.count({ where: { appointments: { some: {} } } }),
+        prisma.appointment.count({
+          where: {
+            startTime: { gte: now },
+            status: { in: ["PENDING", "CONFIRMED"] },
+          },
+        }),
+      ]);
+
+    return { total, newThisMonth, active, upcomingAppointments };
+  } catch (error) {
+    if (error instanceof UnauthorizedError) throw error;
+    console.error("[getPatientStats] Error:", error);
+    return { total: 0, newThisMonth: 0, active: 0, upcomingAppointments: 0 };
   }
 }
 

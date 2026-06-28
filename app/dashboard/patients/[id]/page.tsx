@@ -28,11 +28,6 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { PatientDetailClient } from "@/components/patients/patient-detail";
-import { ConsultationNotes } from "@/components/patients/consultation-notes";
-import { MedicalDocuments } from "@/components/patients/medical-documents";
-import { MedicalHistory } from "@/components/patients/medical-history";
-import { ConsentSection } from "@/components/patients/consent-section";
-import { DataRightsSection } from "@/components/patients/data-rights-section";
 import { getPatientById } from "@/app/dashboard/patients/actions";
 import { getConsultationNotes } from "@/app/dashboard/patients/consultation-note-actions";
 import { getMedicalDocuments } from "@/app/dashboard/patients/medical-document-actions";
@@ -76,14 +71,14 @@ export default async function PatientDetailPage(
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        {/* Header avec breadcrumb */}
-        <header className="flex h-16 shrink-0 items-center gap-2 px-4">
+        {/* Header avec breadcrumb (sticky + glassmorphism léger) */}
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-slate-200/70 bg-white/80 px-4 backdrop-blur-md">
           <SidebarTrigger className="-ml-1" />
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
                 <BreadcrumbLink asChild>
-                  <Link href="/dashboard">Dashboard</Link>
+                  <Link href="/dashboard">Tableau de bord</Link>
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator />
@@ -102,30 +97,15 @@ export default async function PatientDetailPage(
           </Breadcrumb>
         </header>
 
-        {/* Contenu principal: fiche patient */}
-        <main className="flex flex-1 flex-col gap-4 p-4 items-center justify-center">
-          <PatientDetailClient patient={patient} />
-          {/* Story 9.3 — fond clinique structuré (affiché avant l'historique daté). */}
-          <div className="w-full max-w-5xl">
-            <MedicalHistory patientId={id} entries={medicalHistoryEntries} />
-          </div>
-          <div className="w-full max-w-5xl">
-            <ConsultationNotes patientId={id} notes={consultationNotes} />
-          </div>
-          <div className="w-full max-w-5xl">
-            <MedicalDocuments patientId={id} documents={medicalDocuments} />
-          </div>
-          {/* Story 11.1 — consentement RGPD (traçabilité par finalité). */}
-          <div className="w-full max-w-5xl">
-            <ConsentSection patientId={id} records={consentRecords} />
-          </div>
-          {/* Story 11.2 — droits RGPD du patient (export / droit à l'oubli). */}
-          <div className="w-full max-w-5xl">
-            <DataRightsSection
-              patientId={id}
-              patientName={`${patient.firstName} ${patient.lastName}`}
-            />
-          </div>
+        {/* Contenu principal: fiche patient (héro + onglets) */}
+        <main className="flex flex-1 flex-col gap-4 bg-[#f6f8fb] p-4 md:p-6 lg:p-8">
+          <PatientDetailClient
+            patient={patient}
+            medicalHistoryEntries={medicalHistoryEntries}
+            consultationNotes={consultationNotes}
+            medicalDocuments={medicalDocuments}
+            consentRecords={consentRecords}
+          />
         </main>
       </SidebarInset>
     </SidebarProvider>
