@@ -12,7 +12,12 @@
 
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Geist, Geist_Mono } from "next/font/google";
+import {
+  Geist,
+  Geist_Mono,
+  Hanken_Grotesk,
+  Schibsted_Grotesk,
+} from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -32,6 +37,28 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
+});
+
+/**
+ * Hanken Grotesk — police de corps de la landing page publique.
+ * @see app/page.tsx
+ */
+const hankenGrotesk = Hanken_Grotesk({
+  variable: "--font-hanken-grotesk",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
+/**
+ * Schibsted Grotesk — police d'affichage (titres) de la landing page publique.
+ * @see app/page.tsx
+ */
+const schibstedGrotesk = Schibsted_Grotesk({
+  variable: "--font-schibsted-grotesk",
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
   display: "swap",
 });
 
@@ -85,7 +112,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="fr" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen`}
+        className={`${geistSans.variable} ${geistMono.variable} ${hankenGrotesk.variable} ${schibstedGrotesk.variable} antialiased min-h-screen`}
       >
         {children}
         {/* Toaster global pour les notifications (sonner) */}
